@@ -1,0 +1,129 @@
+import Phaser from 'phaser';
+import {
+  PLAYER_RADIUS,
+  ENEMY_RADIUS,
+  PROJECTILE_RADIUS,
+  COLOR_PLAYER,
+  COLOR_PLAYER_INNER,
+  COLOR_ENEMY,
+  COLOR_ENEMY_INNER,
+  COLOR_PROJECTILE,
+  COLOR_PROJECTILE_GLOW,
+  COLOR_FLOOR,
+  COLOR_WALL,
+  COLOR_WALL_TOP,
+  COLOR_DECORATION,
+  ROOM_WIDTH,
+  ROOM_HEIGHT,
+  WALL_THICKNESS,
+} from '../config/constants';
+
+export function generateTextures(scene: Phaser.Scene): void {
+
+  // ── Player ──────────────────────────────────────────────────────────────
+  const playerSize = PLAYER_RADIUS * 2 + 8;
+  const pg = scene.make.graphics({ x: 0, y: 0 });
+  const pc = playerSize / 2;
+  pg.fillStyle(COLOR_PLAYER, 0.3);
+  pg.fillCircle(pc, pc, PLAYER_RADIUS + 4);
+  pg.fillStyle(COLOR_PLAYER, 1);
+  pg.fillCircle(pc, pc, PLAYER_RADIUS);
+  pg.fillStyle(COLOR_PLAYER_INNER, 0.6);
+  pg.fillCircle(pc - 3, pc - 3, PLAYER_RADIUS * 0.5);
+  pg.generateTexture('player', playerSize, playerSize);
+  pg.destroy();
+
+  // ── Direction indicator (small arrow) ───────────────────────────────────
+  const dg = scene.make.graphics({ x: 0, y: 0 });
+  dg.fillStyle(0xffffff, 0.8);
+  dg.fillTriangle(0, 3, 12, 0, 0, -3);
+  dg.generateTexture('direction-indicator', 12, 8);
+  dg.destroy();
+
+  // ── Enemy ────────────────────────────────────────────────────────────────
+  const enemySize = ENEMY_RADIUS * 2 + 8;
+  const eg = scene.make.graphics({ x: 0, y: 0 });
+  const ec = enemySize / 2;
+  eg.fillStyle(COLOR_ENEMY, 0.3);
+  eg.fillCircle(ec, ec, ENEMY_RADIUS + 4);
+  eg.fillStyle(COLOR_ENEMY, 1);
+  eg.fillCircle(ec, ec, ENEMY_RADIUS);
+  eg.fillStyle(COLOR_ENEMY_INNER, 0.6);
+  eg.fillCircle(ec, ec - 2, ENEMY_RADIUS * 0.35);
+  eg.fillStyle(0x220000, 0.9);
+  eg.fillCircle(ec, ec - 2, ENEMY_RADIUS * 0.15);
+  eg.generateTexture('enemy', enemySize, enemySize);
+  eg.destroy();
+
+  // ── Projectile ───────────────────────────────────────────────────────────
+  const projSize = PROJECTILE_RADIUS * 2 + 10;
+  const prg = scene.make.graphics({ x: 0, y: 0 });
+  const prc = projSize / 2;
+  prg.fillStyle(COLOR_PROJECTILE_GLOW, 0.2);
+  prg.fillCircle(prc, prc, PROJECTILE_RADIUS + 5);
+  prg.fillStyle(COLOR_PROJECTILE_GLOW, 0.4);
+  prg.fillCircle(prc, prc, PROJECTILE_RADIUS + 2);
+  prg.fillStyle(COLOR_PROJECTILE, 1);
+  prg.fillCircle(prc, prc, PROJECTILE_RADIUS);
+  prg.fillStyle(0xffffff, 0.7);
+  prg.fillCircle(prc, prc, PROJECTILE_RADIUS * 0.4);
+  prg.generateTexture('projectile', projSize, projSize);
+  prg.destroy();
+
+  // ── Floor ────────────────────────────────────────────────────────────────
+  const fg = scene.make.graphics({ x: 0, y: 0 });
+  fg.fillStyle(COLOR_FLOOR, 1);
+  fg.fillRect(0, 0, ROOM_WIDTH, ROOM_HEIGHT);
+  fg.lineStyle(1, 0x222244, 0.15);
+  const tileSize = 48;
+  for (let x = 0; x <= ROOM_WIDTH; x += tileSize) {
+    fg.lineBetween(x, 0, x, ROOM_HEIGHT);
+  }
+  for (let y = 0; y <= ROOM_HEIGHT; y += tileSize) {
+    fg.lineBetween(0, y, ROOM_WIDTH, y);
+  }
+  fg.generateTexture('floor', ROOM_WIDTH, ROOM_HEIGHT);
+  fg.destroy();
+
+  // ── Wall horizontal ──────────────────────────────────────────────────────
+  const wh = scene.make.graphics({ x: 0, y: 0 });
+  wh.fillStyle(COLOR_WALL, 1);
+  wh.fillRect(0, 0, ROOM_WIDTH, WALL_THICKNESS);
+  wh.fillStyle(COLOR_WALL_TOP, 1);
+  wh.fillRect(0, 0, ROOM_WIDTH, 6);
+  wh.generateTexture('wall-h', ROOM_WIDTH, WALL_THICKNESS);
+  wh.destroy();
+
+  // ── Wall vertical ────────────────────────────────────────────────────────
+  const wv = scene.make.graphics({ x: 0, y: 0 });
+  wv.fillStyle(COLOR_WALL, 1);
+  wv.fillRect(0, 0, WALL_THICKNESS, ROOM_HEIGHT);
+  wv.fillStyle(COLOR_WALL_TOP, 1);
+  wv.fillRect(0, 0, 6, ROOM_HEIGHT);
+  wv.generateTexture('wall-v', WALL_THICKNESS, ROOM_HEIGHT);
+  wv.destroy();
+
+  // ── Decoration ───────────────────────────────────────────────────────────
+  const decSize = 24;
+  const dcg = scene.make.graphics({ x: 0, y: 0 });
+  dcg.fillStyle(COLOR_DECORATION, 1);
+  dcg.fillRect(2, 2, decSize - 4, decSize - 4);
+  dcg.fillStyle(0x333366, 0.5);
+  dcg.fillRect(4, 4, decSize - 8, decSize - 8);
+  dcg.generateTexture('decoration', decSize, decSize);
+  dcg.destroy();
+
+  // ── Enemy HP bar background ──────────────────────────────────────────────
+  const hbg = scene.make.graphics({ x: 0, y: 0 });
+  hbg.fillStyle(0x000000, 0.7);
+  hbg.fillRect(0, 0, ENEMY_RADIUS * 2 + 8, 4);
+  hbg.generateTexture('enemy-hp-bg', ENEMY_RADIUS * 2 + 8, 4);
+  hbg.destroy();
+
+  // ── Enemy HP bar fill ────────────────────────────────────────────────────
+  const hbf = scene.make.graphics({ x: 0, y: 0 });
+  hbf.fillStyle(COLOR_ENEMY, 1);
+  hbf.fillRect(0, 0, ENEMY_RADIUS * 2 + 6, 2);
+  hbf.generateTexture('enemy-hp-fill', ENEMY_RADIUS * 2 + 6, 2);
+  hbf.destroy();
+}
