@@ -4,442 +4,437 @@ import Phaser from 'phaser';
 import { GrimoireSystem } from '../systems/GrimoireSystem';
 import { SpellBuilder, Spell } from '../systems/SpellBuilder';
 import { SpellValidator } from '../systems/SpellValidator';
-import { SlotPanel, SlotContent } from '../ui/SlotPanel';
-import { SpellPreview } from '../ui/SpellPreview';
-import { ComponentPicker, PickerItem } from '../ui/ComponentPicker';
+import { ComponentRow, ComponentOption } from '../ui/ComponentRow';
+import { SpellAssemblyPreview } from '../ui/SpellAssemblyPreview';
 import {
   CoreId, FormId, PrefixId, SuffixId,
-  CoreComponent, FormComponent, PrefixComponent, SuffixComponent,
-  getAllCoreIds, getAllFormIds, getAllPrefixIds, getAllSuffixIds,
   CORE_REGISTRY, FORM_REGISTRY, PREFIX_REGISTRY, SUFFIX_REGISTRY,
+  getAllCoreIds, getAllFormIds, getAllPrefixIds, getAllSuffixIds,
 } from '../config/spellComponents';
-import { ROOM_WIDTH, ROOM_HEIGHT } from '../config/constants';
-
-type ActiveSlot = 'prefix' | 'core' | 'form' | 'suffix';
+import { ROOM_WIDTH, ROOM_HEIGHT, SPELL_SLOT_COUNT } from '../config/constants';
 
 export class GrimoireScene extends Phaser.Scene {
   private grimoireSystem!: GrimoireSystem;
+  private targetSlotIndex: number = 0;
 
-  // UI layers
-  private overlay!: Phaser.GameObjects.Rectangle;
-  private panelBorder!: Phaser.GameObjects.Rectangle;
-  private panel!: Phaser.GameObjects.Rectangle;
-
-  // Slot panels
-  private prefixSlot!: SlotPanel;
-  private coreSlot!: SlotPanel;
-  private formSlot!: SlotPanel;
-  private suffixSlot!: SlotPanel;
-
-  // Spell preview
-  private spellPreview!: SpellPreview;
-
-  // Component pickers
-  private currentPicker: ComponentPicker | null = null;
-  private activeSlot: ActiveSlot = 'core';
-
-  // Slot tab buttons
-  private tabButtons: { slot: ActiveSlot; bg: Phaser.GameObjects.Rectangle; text: Phaser.GameObjects.Text }[] = [];
-
-  // Selected IDs
   private selectedPrefix: PrefixId | null = null;
   private selectedCore: CoreId | null = null;
   private selectedForm: FormId | null = null;
   private selectedSuffix: SuffixId | null = null;
 
-  // Text input (kept for power-users)
-  private inputBox!: Phaser.GameObjects.Rectangle;
-  private inputText!: Phaser.GameObjects.Text;
-  private cursor!: Phaser.GameObjects.Rectangle;
-  private currentInput = '';
-  private cursorBlinkTimer!: Phaser.Time.TimerEvent;
+  private prefixRow!: ComponentRow;
+  private coreRow!: ComponentRow;
+  private formRow!: ComponentRow;
+  private suffixRow!: ComponentRow;
+  private preview!: SpellAssemblyPreview;
 
-  // Prepare button
-  private prepareBtn!: Phaser.GameObjects.Rectangle;
-  private prepareBtnText!: Phaser.GameObjects.Text;
+  private castBtn!: Phaser.GameObjects.Rectangle;
+  private castBtnText!: Phaser.GameObjects.Text;
+  private slotBtns: Phaser.GameObjects.Rectangle[] = [];
+  private slotTexts: Phaser.GameObjects.Text[] = [];
 
-  private isOpen = false;
+  private currentSpell: Spell | null = null;
 
   constructor() { super({ key: 'GrimoireScene' }); }
 
-  init(data: { grimoireSystem: GrimoireSystem }): void {
+  init(data: { grimoireSystem: GrimoireSystem; slotIndex?: number }): void {
     this.grimoireSystem = data.grimoireSystem;
+    this.targetSlotIndex = data.slotIndex ?? this.grimoireSystem.activeSlotIndex;
   }
 
   create(): void {
-    this.isOpen = true;
-    this.currentInput = '';
+    this.currentSpell = null;
+    this.slotBtns = [];
+    this.slotTexts = [];
+
+    // Load existing slot config
+    const existing = this.grimoireSystem.slots[this.targetSlotIndex]?.spell;
+    if (existing) {
+      this.selectedCore = existing.core.id;
+      this.selectedForm = existing.form.id;
+      this.selectedPrefix = existing.prefix?.id as PrefixId ?? null;
+      this.selectedSuffix = existing.suffix?.id as SuffixId ?? null;
+    } else {
+      this.selectedPrefix = null;
+      this.selectedCore = null;
+      this.selectedForm = null;
+      this.selectedSuffix = null;
+    }
 
     this.createOverlay();
-    this.createPanel();
+    this.createBookPanel();
     this.createTitle();
-    this.createSlots();
-    this.createTabButtons();
-    this.createSpellPreview();
-    this.createPickerArea();
-    this.createTextInput();
-    this.createPrepareButton();
+    this.createComponentRows();
+    this.createPreview();
+    this.createSlotSelector();
+    this.createHistory();
+    this.createCastButton();
+    this.createCloseButton();
     this.createControls();
-    this.setupInput();
-    this.startCursorBlink();
 
-    // Default to Core tab
-    this.switchTab('core');
-
-    this.tweens.add({
-      targets: [this.overlay, this.panel, this.panelBorder],
-      alpha: { from: 0, to: undefined }, duration: 200, ease: 'Power2',
-    });
+    this.rebuildPreview();
+    this.updateCompatibility();
   }
 
   // ── Layout ──────────────────────────────────────────────────────────────
 
   private createOverlay(): void {
-    this.overlay = this.add.rectangle(ROOM_WIDTH / 2, ROOM_HEIGHT / 2, ROOM_WIDTH, ROOM_HEIGHT, 0x000000, 0.65).setDepth(200);
+    const overlay = this.add.rectangle(
+      ROOM_WIDTH / 2, ROOM_HEIGHT / 2, ROOM_WIDTH, ROOM_HEIGHT, 0x000000, 0.55
+    ).setDepth(200);
+    // Make overlay interactive so clicks don't pass through to game
+    overlay.setInteractive();
   }
 
-  private createPanel(): void {
-    const w = 750, h = 660, cx = ROOM_WIDTH / 2, cy = ROOM_HEIGHT / 2;
-    this.panelBorder = this.add.rectangle(cx, cy, w + 4, h + 4, 0x4a3f6b, 0.8).setDepth(201);
-    this.panel = this.add.rectangle(cx, cy, w, h, 0x100e1c, 0.97).setDepth(202);
-    this.add.rectangle(cx, cy, w - 12, h - 12, 0x000000, 0).setDepth(203).setStrokeStyle(1, 0x3a2f5a, 0.4);
+  private createBookPanel(): void {
+    const cx = ROOM_WIDTH / 2, cy = ROOM_HEIGHT / 2;
+    this.add.rectangle(cx, cy, 780, 640, 0x2a1f3a, 0.9).setDepth(201);
+    this.add.rectangle(cx, cy, 770, 630, 0x0e0c18, 0.97).setDepth(202);
+    this.add.rectangle(cx, cy, 754, 614, 0, 0).setDepth(203)
+      .setStrokeStyle(1, 0x3a2f5a, 0.3);
   }
 
   private createTitle(): void {
-    const cx = ROOM_WIDTH / 2, topY = ROOM_HEIGHT / 2 - 310;
-    this.dtxt(cx - 140, topY, '✦', 16, '#6b5b95').setOrigin(0.5);
-    this.dtxt(cx, topY, 'GRIMOIRE', 26, '#c8b8e8', true).setOrigin(0.5);
-    this.dtxt(cx + 140, topY, '✦', 16, '#6b5b95').setOrigin(0.5);
-    this.add.rectangle(cx, topY + 20, 420, 1, 0x3a2f5a, 0.5).setDepth(210);
+    const cx = ROOM_WIDTH / 2, topY = ROOM_HEIGHT / 2 - 295;
+    this.add.text(cx - 130, topY, '✦', {
+      fontFamily: '"Courier New", monospace', fontSize: '14px', color: '#6b5b95',
+    }).setOrigin(0.5).setDepth(210);
+    this.add.text(cx, topY, 'GRIMOIRE', {
+      fontFamily: '"Courier New", monospace', fontSize: '22px',
+      color: '#c8b8e8', fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(210);
+    this.add.text(cx + 130, topY, '✦', {
+      fontFamily: '"Courier New", monospace', fontSize: '14px', color: '#6b5b95',
+    }).setOrigin(0.5).setDepth(210);
+    this.add.rectangle(cx, topY + 18, 380, 1, 0x3a2f5a, 0.4).setDepth(210);
   }
 
-  // ── Slot Panels ─────────────────────────────────────────────────────────
+  // ── Component Rows ──────────────────────────────────────────────────────
 
-  private createSlots(): void {
-    const cx = ROOM_WIDTH / 2;
-    const slotY = ROOM_HEIGHT / 2 - 255;
-    const slotW = 130;
-    const slotH = 100;
-    const gap = 12;
-    const totalW = slotW * 4 + gap * 3;
-    const startX = cx - totalW / 2 + slotW / 2;
+  private createComponentRows(): void {
+    const leftX = ROOM_WIDTH / 2 - 365;
+    let rowY = ROOM_HEIGHT / 2 - 248;
 
-    // Connector arrows between slots
-    for (let i = 0; i < 3; i++) {
-      const arrowX = startX + (slotW + gap) * i + slotW / 2 + gap / 2;
-      this.dtxt(arrowX, slotY, '+', 18, '#3a2f5a').setOrigin(0.5);
-    }
-
-    this.prefixSlot = new SlotPanel(this, {
-      x: startX, y: slotY, width: slotW, height: slotH,
-      label: 'PREFIX', required: false, accentColor: 0x88cc88,
-    });
-
-    this.coreSlot = new SlotPanel(this, {
-      x: startX + slotW + gap, y: slotY, width: slotW, height: slotH,
-      label: 'CORE', required: true, accentColor: 0xff8844,
-    });
-
-    this.formSlot = new SlotPanel(this, {
-      x: startX + (slotW + gap) * 2, y: slotY, width: slotW, height: slotH,
-      label: 'FORM', required: true, accentColor: 0x8888ff,
-    });
-
-    this.suffixSlot = new SlotPanel(this, {
-      x: startX + (slotW + gap) * 3, y: slotY, width: slotW, height: slotH,
-      label: 'SUFFIX', required: false, accentColor: 0xccaa66,
-    });
-  }
-
-  // ── Tab Buttons ─────────────────────────────────────────────────────────
-
-  private createTabButtons(): void {
-    const cx = ROOM_WIDTH / 2;
-    const tabY = ROOM_HEIGHT / 2 - 185;
-    const tabs: { slot: ActiveSlot; label: string; color: number }[] = [
-      { slot: 'prefix', label: 'Prefixes', color: 0x88cc88 },
-      { slot: 'core', label: 'Cores', color: 0xff8844 },
-      { slot: 'form', label: 'Forms', color: 0x8888ff },
-      { slot: 'suffix', label: 'Suffixes', color: 0xccaa66 },
-    ];
-
-    const tabW = 120;
-    const totalW = tabW * 4 + 8 * 3;
-    const startX = cx - totalW / 2 + tabW / 2;
-
-    for (let i = 0; i < tabs.length; i++) {
-      const t = tabs[i];
-      const tx = startX + i * (tabW + 8);
-
-      const bg = this.add.rectangle(tx, tabY, tabW, 26, 0x1a1833, 0.8).setDepth(215);
-      bg.setStrokeStyle(1, t.color, 0.3);
-      bg.setInteractive({ useHandCursor: true });
-
-      const hex = '#' + t.color.toString(16).padStart(6, '0');
-      const text = this.add.text(tx, tabY, t.label, {
-        fontFamily: '"Courier New", monospace',
-        fontSize: '11px',
-        color: hex,
-        fontStyle: 'bold',
-      }).setOrigin(0.5).setDepth(216);
-
-      bg.on('pointerdown', () => this.switchTab(t.slot));
-      bg.on('pointerover', () => bg.setFillStyle(0x222244, 0.9));
-      bg.on('pointerout', () => {
-        bg.setFillStyle(this.activeSlot === t.slot ? 0x222244 : 0x1a1833, 0.8);
-      });
-
-      this.tabButtons.push({ slot: t.slot, bg, text });
-    }
-  }
-
-  // ── Spell Preview ───────────────────────────────────────────────────────
-
-  private createSpellPreview(): void {
-    const cx = ROOM_WIDTH / 2;
-    const previewY = ROOM_HEIGHT / 2 + 170;
-    this.spellPreview = new SpellPreview(this, cx, previewY);
-  }
-
-  // ── Picker Area ─────────────────────────────────────────────────────────
-
-  private createPickerArea(): void {
-    // Background for picker area
-    const cx = ROOM_WIDTH / 2;
-    const pickerY = ROOM_HEIGHT / 2 - 30;
-    this.add.rectangle(cx, pickerY, 520, 280, 0x0a0816, 0.6).setDepth(214);
-    this.add.rectangle(cx, pickerY, 520, 280).setFillStyle(0, 0)
-      .setStrokeStyle(1, 0x2a1f4a, 0.3).setDepth(214);
-  }
-
-  private switchTab(slot: ActiveSlot): void {
-    this.activeSlot = slot;
-
-    // Update tab highlights
-    for (const tab of this.tabButtons) {
-      const active = tab.slot === slot;
-      tab.bg.setFillStyle(active ? 0x222244 : 0x1a1833, 0.8);
-      tab.bg.setStrokeStyle(active ? 2 : 1,
-        active ? 0xffffff : parseInt(tab.text.style.color!.replace('#', ''), 16), active ? 0.5 : 0.3);
-    }
-
-    // Update slot highlights
-    this.prefixSlot.setActive(slot === 'prefix');
-    this.coreSlot.setActive(slot === 'core');
-    this.formSlot.setActive(slot === 'form');
-    this.suffixSlot.setActive(slot === 'suffix');
-
-    // Rebuild picker
-    this.buildPicker(slot);
-  }
-
-  private buildPicker(slot: ActiveSlot): void {
-    if (this.currentPicker) {
-      this.currentPicker.destroy();
-      this.currentPicker = null;
-    }
-
-    const cx = ROOM_WIDTH / 2;
-    const pickerY = ROOM_HEIGHT / 2 - 150;
-    const pickerW = 480;
-
-    let items: PickerItem[] = [];
-
-    switch (slot) {
-      case 'prefix':
-        items = this.buildPrefixItems();
-        break;
-      case 'core':
-        items = this.buildCoreItems();
-        break;
-      case 'form':
-        items = this.buildFormItems();
-        break;
-      case 'suffix':
-        items = this.buildSuffixItems();
-        break;
-    }
-
-    this.currentPicker = new ComponentPicker(
-      this, cx, pickerY, pickerW, items,
-      (item) => this.onPickerSelect(slot, item),
+    const prefixOpts = this.buildOptions('prefix');
+    this.prefixRow = new ComponentRow(
+      this, leftX, rowY, 'PREFIX', false, '#88cc88', prefixOpts,
+      (opt) => { this.selectedPrefix = opt.id as PrefixId | null; this.onSelectionChanged(); },
     );
+    this.prefixRow.setSelectedId(this.selectedPrefix);
+    rowY += 82;
 
-    // Set current selection
-    switch (slot) {
-      case 'prefix': this.currentPicker.setSelectedId(this.selectedPrefix); break;
-      case 'core': this.currentPicker.setSelectedId(this.selectedCore); break;
-      case 'form': this.currentPicker.setSelectedId(this.selectedForm); break;
-      case 'suffix': this.currentPicker.setSelectedId(this.selectedSuffix); break;
+    const coreOpts = this.buildOptions('core');
+    this.coreRow = new ComponentRow(
+      this, leftX, rowY, 'CORE', true, '#ffaa66', coreOpts,
+      (opt) => { this.selectedCore = opt.id as CoreId | null; this.onSelectionChanged(); },
+    );
+    this.coreRow.setSelectedId(this.selectedCore);
+    rowY += 82;
+
+    const formOpts = this.buildOptions('form');
+    this.formRow = new ComponentRow(
+      this, leftX, rowY, 'FORM', true, '#8888dd', formOpts,
+      (opt) => { this.selectedForm = opt.id as FormId | null; this.onSelectionChanged(); },
+    );
+    this.formRow.setSelectedId(this.selectedForm);
+    rowY += 82;
+
+    const suffixOpts = this.buildOptions('suffix');
+    this.suffixRow = new ComponentRow(
+      this, leftX, rowY, 'SUFFIX', false, '#ccaa66', suffixOpts,
+      (opt) => { this.selectedSuffix = opt.id as SuffixId | null; this.onSelectionChanged(); },
+    );
+    this.suffixRow.setSelectedId(this.selectedSuffix);
+  }
+
+  private buildOptions(type: 'prefix' | 'core' | 'form' | 'suffix'): ComponentOption[] {
+    const opts: ComponentOption[] = [];
+
+    if (type === 'prefix' || type === 'suffix') {
+      opts.push({
+        id: null, displayName: 'None', description: '',
+        manaCost: 0, color: 0x555566, compatible: true,
+      });
     }
-  }
 
-  private buildPrefixItems(): PickerItem[] {
-    return getAllPrefixIds().map(id => {
-      const p = PREFIX_REGISTRY[id];
-      let compatible = true;
-      let reason: string | undefined;
-
-      if (this.selectedForm) {
-        const result = SpellValidator.validate(
-          this.selectedCore, this.selectedForm, id, this.selectedSuffix,
-        );
-        const prefixError = result.errors.find(e => e.field === 'prefix' || e.field === 'combination');
-        if (prefixError) {
-          compatible = false;
-          reason = prefixError.suggestion || prefixError.message;
-        }
-      }
-
-      return {
-        id, displayName: p.displayName, description: p.description,
-        manaCost: p.manaCost, color: 0x88cc88, compatible, incompatReason: reason,
-      };
-    });
-  }
-
-  private buildCoreItems(): PickerItem[] {
-    return getAllCoreIds().map(id => {
-      const c = CORE_REGISTRY[id];
-      return {
-        id, displayName: c.displayName, description: c.description,
-        manaCost: c.manaCost, color: c.visual.color, compatible: true,
-      };
-    });
-  }
-
-  private buildFormItems(): PickerItem[] {
-    return getAllFormIds().map(id => {
-      const f = FORM_REGISTRY[id];
-      return {
-        id, displayName: f.displayName, description: f.description,
-        manaCost: f.manaCost, color: 0x8888ff, compatible: true,
-      };
-    });
-  }
-
-  private buildSuffixItems(): PickerItem[] {
-    return getAllSuffixIds().map(id => {
-      const s = SUFFIX_REGISTRY[id];
-      let compatible = true;
-      let reason: string | undefined;
-
-      if (this.selectedForm) {
-        const result = SpellValidator.validate(
-          this.selectedCore, this.selectedForm, this.selectedPrefix, id,
-        );
-        const suffixError = result.errors.find(e => e.field === 'suffix' || e.field === 'combination');
-        if (suffixError) {
-          compatible = false;
-          reason = suffixError.suggestion || suffixError.message;
-        }
-      }
-
-      return {
-        id, displayName: s.displayName, description: s.description,
-        manaCost: s.manaCost, color: 0xccaa66, compatible, incompatReason: reason,
-      };
-    });
-  }
-
-  // ── Selection ───────────────────────────────────────────────────────────
-
-  private onPickerSelect(slot: ActiveSlot, item: PickerItem | null): void {
-    switch (slot) {
+    switch (type) {
       case 'prefix':
-        this.selectedPrefix = item ? item.id as PrefixId : null;
-        this.updateSlotContent('prefix');
+        for (const id of getAllPrefixIds()) {
+          const p = PREFIX_REGISTRY[id];
+          opts.push({
+            id, displayName: p.displayName, description: p.description,
+            manaCost: p.manaCost, color: 0x88cc88, compatible: true,
+          });
+        }
         break;
       case 'core':
-        this.selectedCore = item ? item.id as CoreId : null;
-        this.updateSlotContent('core');
+        for (const id of getAllCoreIds()) {
+          const c = CORE_REGISTRY[id];
+          opts.push({
+            id, displayName: c.displayName, description: c.description,
+            manaCost: c.manaCost, color: c.visual.color, compatible: true,
+          });
+        }
         break;
       case 'form':
-        this.selectedForm = item ? item.id as FormId : null;
-        this.updateSlotContent('form');
+        for (const id of getAllFormIds()) {
+          const f = FORM_REGISTRY[id];
+          opts.push({
+            id, displayName: f.displayName, description: f.description,
+            manaCost: f.manaCost, color: 0x8888dd, compatible: true,
+          });
+        }
         break;
       case 'suffix':
-        this.selectedSuffix = item ? item.id as SuffixId : null;
-        this.updateSlotContent('suffix');
+        for (const id of getAllSuffixIds()) {
+          const s = SUFFIX_REGISTRY[id];
+          opts.push({
+            id, displayName: s.displayName, description: s.description,
+            manaCost: s.manaCost, color: 0xccaa66, compatible: true,
+          });
+        }
         break;
     }
-
-    this.rebuildPreview();
-    this.updateTextInput();
-
-    // Rebuild pickers for prefix/suffix since compatibility may have changed
-    if (slot === 'form' || slot === 'core') {
-      if (this.activeSlot === 'prefix' || this.activeSlot === 'suffix') {
-        this.buildPicker(this.activeSlot);
-      }
-    }
-  }
-
-  private updateSlotContent(slot: ActiveSlot): void {
-    switch (slot) {
-      case 'prefix': {
-        if (this.selectedPrefix) {
-          const p = PREFIX_REGISTRY[this.selectedPrefix];
-          this.prefixSlot.setContent({
-            id: p.id, displayName: p.displayName, description: p.description,
-            manaCost: p.manaCost, color: 0x88cc88,
-          });
-        } else {
-          this.prefixSlot.setContent(null);
-        }
-        break;
-      }
-      case 'core': {
-        if (this.selectedCore) {
-          const c = CORE_REGISTRY[this.selectedCore];
-          this.coreSlot.setContent({
-            id: c.id, displayName: c.displayName, description: c.description,
-            manaCost: c.manaCost, color: c.visual.color,
-          });
-        } else {
-          this.coreSlot.setContent(null);
-        }
-        break;
-      }
-      case 'form': {
-        if (this.selectedForm) {
-          const f = FORM_REGISTRY[this.selectedForm];
-          this.formSlot.setContent({
-            id: f.id, displayName: f.displayName, description: f.description,
-            manaCost: f.manaCost, color: 0x8888ff,
-          });
-        } else {
-          this.formSlot.setContent(null);
-        }
-        break;
-      }
-      case 'suffix': {
-        if (this.selectedSuffix) {
-          const s = SUFFIX_REGISTRY[this.selectedSuffix];
-          this.suffixSlot.setContent({
-            id: s.id, displayName: s.displayName, description: s.description,
-            manaCost: s.manaCost, color: 0xccaa66,
-          });
-        } else {
-          this.suffixSlot.setContent(null);
-        }
-        break;
-      }
-    }
+    return opts;
   }
 
   // ── Preview ─────────────────────────────────────────────────────────────
 
-  private rebuildPreview(): void {
-    // Clear all slot errors
-    this.prefixSlot.clearError();
-    this.coreSlot.clearError();
-    this.formSlot.clearError();
-    this.suffixSlot.clearError();
+  private createPreview(): void {
+    this.preview = new SpellAssemblyPreview(
+      this, ROOM_WIDTH / 2 + 210, ROOM_HEIGHT / 2 - 100,
+    );
+  }
 
+  // ── Slot Selector ───────────────────────────────────────────────────────
+
+  private createSlotSelector(): void {
+    const cx = ROOM_WIDTH / 2 + 210;
+    const sy = ROOM_HEIGHT / 2 + 90;
+
+    this.add.text(cx, sy, 'ASSIGN TO SLOT:', {
+      fontFamily: '"Courier New", monospace', fontSize: '9px',
+      color: '#666677', fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(220);
+
+    const slotW = 80;
+    const gap = 8;
+    const totalW = SPELL_SLOT_COUNT * slotW + (SPELL_SLOT_COUNT - 1) * gap;
+    const startX = cx - totalW / 2 + slotW / 2;
+
+    for (let i = 0; i < SPELL_SLOT_COUNT; i++) {
+      const bx = startX + i * (slotW + gap);
+      const by = sy + 22;
+
+      const btn = this.add.rectangle(bx, by, slotW, 24, 0x161428, 0.9).setDepth(220);
+      btn.setStrokeStyle(
+        1, i === this.targetSlotIndex ? 0xaaaacc : 0x3a2f5a, 0.5,
+      );
+      btn.setInteractive({ useHandCursor: true });
+
+      const existingSpell = this.grimoireSystem.slots[i]?.spell;
+      const slotLabel = existingSpell
+        ? existingSpell.name.substring(0, 10)
+        : `Slot ${i + 1}`;
+
+      const txt = this.add.text(bx, by, slotLabel, {
+        fontFamily: '"Courier New", monospace', fontSize: '8px',
+        color: i === this.targetSlotIndex ? '#aaaacc' : '#555566',
+      }).setOrigin(0.5).setDepth(221);
+
+      btn.on('pointerdown', () => {
+        this.targetSlotIndex = i;
+        this.updateSlotBtnVisuals();
+
+        // Load slot's spell into editor
+        const slotSpell = this.grimoireSystem.slots[i]?.spell;
+        if (slotSpell) {
+          this.selectedCore = slotSpell.core.id;
+          this.selectedForm = slotSpell.form.id;
+          this.selectedPrefix = slotSpell.prefix?.id as PrefixId ?? null;
+          this.selectedSuffix = slotSpell.suffix?.id as SuffixId ?? null;
+        } else {
+          this.selectedPrefix = null;
+          this.selectedCore = null;
+          this.selectedForm = null;
+          this.selectedSuffix = null;
+        }
+        this.prefixRow.setSelectedId(this.selectedPrefix);
+        this.coreRow.setSelectedId(this.selectedCore);
+        this.formRow.setSelectedId(this.selectedForm);
+        this.suffixRow.setSelectedId(this.selectedSuffix);
+        this.onSelectionChanged();
+      });
+
+      this.slotBtns.push(btn);
+      this.slotTexts.push(txt);
+    }
+  }
+
+  private updateSlotBtnVisuals(): void {
+    for (let i = 0; i < this.slotBtns.length; i++) {
+      const active = i === this.targetSlotIndex;
+      this.slotBtns[i].setStrokeStyle(
+        active ? 2 : 1, active ? 0xaaaacc : 0x3a2f5a, active ? 0.7 : 0.4,
+      );
+      this.slotTexts[i].setColor(active ? '#aaaacc' : '#555566');
+    }
+  }
+
+  // ── History ─────────────────────────────────────────────────────────────
+
+  private createHistory(): void {
+    const cx = ROOM_WIDTH / 2 + 210;
+    const hy = ROOM_HEIGHT / 2 + 150;
+
+    this.add.text(cx, hy, 'RECENT SPELLS:', {
+      fontFamily: '"Courier New", monospace', fontSize: '9px',
+      color: '#555566', fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(220);
+
+    const history = this.grimoireSystem.history;
+    for (let i = 0; i < Math.min(history.length, 5); i++) {
+      const entry = history[i];
+      const ey = hy + 16 + i * 20;
+      const hex = '#' + entry.spell.visual.color.toString(16).padStart(6, '0');
+
+      const hBg = this.add.rectangle(cx, ey, 260, 18, 0x111122, 0.5).setDepth(220);
+      hBg.setInteractive({ useHandCursor: true });
+
+      this.add.text(cx - 120, ey, entry.spell.name, {
+        fontFamily: '"Courier New", monospace', fontSize: '8px', color: hex,
+      }).setOrigin(0, 0.5).setDepth(221);
+
+      this.add.text(cx + 110, ey, `${entry.spell.manaCost} MP`, {
+        fontFamily: '"Courier New", monospace', fontSize: '8px', color: '#4488aa',
+      }).setOrigin(1, 0.5).setDepth(221);
+
+      hBg.on('pointerover', () => hBg.setFillStyle(0x222244, 0.7));
+      hBg.on('pointerout', () => hBg.setFillStyle(0x111122, 0.5));
+      hBg.on('pointerdown', () => {
+        this.selectedPrefix = entry.prefixId;
+        this.selectedCore = entry.coreId;
+        this.selectedForm = entry.formId;
+        this.selectedSuffix = entry.suffixId;
+        this.prefixRow.setSelectedId(this.selectedPrefix);
+        this.coreRow.setSelectedId(this.selectedCore);
+        this.formRow.setSelectedId(this.selectedForm);
+        this.suffixRow.setSelectedId(this.selectedSuffix);
+        this.onSelectionChanged();
+      });
+    }
+
+    if (history.length === 0) {
+      this.add.text(cx, hy + 20, 'No spells created yet', {
+        fontFamily: '"Courier New", monospace', fontSize: '8px',
+        color: '#444455', fontStyle: 'italic',
+      }).setOrigin(0.5).setDepth(220);
+    }
+  }
+
+  // ── Cast Button ─────────────────────────────────────────────────────────
+
+  private createCastButton(): void {
+    const cx = ROOM_WIDTH / 2 + 210;
+    const by = ROOM_HEIGHT / 2 + 270;
+
+    this.castBtn = this.add.rectangle(cx, by, 220, 36, 0x1a1a22, 0.8).setDepth(220);
+    this.castBtn.setStrokeStyle(1, 0x444455, 0.4);
+    this.castBtn.setInteractive({ useHandCursor: true });
+
+    this.castBtnText = this.add.text(cx, by, '✦  PREPARE SPELL  ✦', {
+      fontFamily: '"Courier New", monospace', fontSize: '12px',
+      color: '#555566', fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(221);
+
+    this.castBtn.on('pointerover', () => {
+      if (this.currentSpell) this.castBtn.setFillStyle(0x223322, 0.9);
+    });
+    this.castBtn.on('pointerout', () => {
+      this.castBtn.setFillStyle(this.currentSpell ? 0x1a2a1a : 0x1a1a22, 0.8);
+    });
+    this.castBtn.on('pointerdown', () => {
+      this.prepareSpell();
+    });
+
+    this.setCastEnabled(false);
+  }
+
+  private setCastEnabled(enabled: boolean): void {
+    if (enabled) {
+      this.castBtn.setFillStyle(0x1a2a1a, 0.9)
+        .setStrokeStyle(1, 0x44aa44, 0.5);
+      this.castBtnText.setColor('#66cc66');
+      this.castBtn.setInteractive({ useHandCursor: true });
+    } else {
+      this.castBtn.setFillStyle(0x1a1a22, 0.8)
+        .setStrokeStyle(1, 0x444455, 0.3);
+      this.castBtnText.setColor('#555566');
+      this.castBtn.disableInteractive();
+    }
+  }
+
+  // ── Close Button ────────────────────────────────────────────────────────
+
+  private createCloseButton(): void {
+    const closeX = ROOM_WIDTH / 2 + 375;
+    const closeY = ROOM_HEIGHT / 2 - 300;
+
+    const closeBtn = this.add.rectangle(closeX, closeY, 30, 30, 0x331111, 0.8).setDepth(230);
+    closeBtn.setStrokeStyle(1, 0x664444, 0.5);
+    closeBtn.setInteractive({ useHandCursor: true });
+
+    this.add.text(closeX, closeY, '✕', {
+      fontFamily: '"Courier New", monospace', fontSize: '16px', color: '#aa6666',
+    }).setOrigin(0.5).setDepth(231);
+
+    closeBtn.on('pointerover', () => closeBtn.setFillStyle(0x442222, 0.9));
+    closeBtn.on('pointerout', () => closeBtn.setFillStyle(0x331111, 0.8));
+    closeBtn.on('pointerdown', () => {
+      this.requestClose();
+    });
+  }
+
+  // ── Controls Text ───────────────────────────────────────────────────────
+
+  private createControls(): void {
+    this.add.text(ROOM_WIDTH / 2, ROOM_HEIGHT / 2 + 302, 'TAB / ESC = Close     1-3 = Switch Slot', {
+      fontFamily: '"Courier New", monospace', fontSize: '9px', color: '#444455',
+    }).setOrigin(0.5).setDepth(210);
+  }
+
+  // ── Selection Logic ─────────────────────────────────────────────────────
+
+  private onSelectionChanged(): void {
+    this.updateCompatibility();
+    this.rebuildPreview();
+  }
+
+  private updateCompatibility(): void {
+    this.prefixRow.updateCompatibility((id) => {
+      if (id === null) return true;
+      if (!this.selectedCore || !this.selectedForm) return true;
+      const result = SpellValidator.validate(
+        this.selectedCore, this.selectedForm, id as PrefixId, this.selectedSuffix,
+      );
+      return !result.errors.some(e => e.field === 'prefix' || e.field === 'combination');
+    });
+
+    this.suffixRow.updateCompatibility((id) => {
+      if (id === null) return true;
+      if (!this.selectedCore || !this.selectedForm) return true;
+      const result = SpellValidator.validate(
+        this.selectedCore, this.selectedForm, this.selectedPrefix, id as SuffixId,
+      );
+      return !result.errors.some(e => e.field === 'suffix' || e.field === 'combination');
+    });
+  }
+
+  private rebuildPreview(): void {
     if (!this.selectedCore || !this.selectedForm) {
-      this.spellPreview.showEmpty();
-      this.setPrepareEnabled(false);
+      this.currentSpell = null;
+      this.preview.showEmpty();
+      this.setCastEnabled(false);
       return;
     }
 
@@ -449,229 +444,47 @@ export class GrimoireScene extends Phaser.Scene {
     );
 
     if (result.success && result.spell) {
-      this.spellPreview.showSpell(result.spell);
-      this.setPrepareEnabled(true);
+      this.currentSpell = result.spell;
+      this.preview.showSpell(result.spell);
+      this.setCastEnabled(true);
     } else {
-      this.spellPreview.showError(result.error, result.suggestion);
-      this.setPrepareEnabled(false);
-
-      // Highlight which slot has the error
-      const validation = SpellValidator.validate(
-        this.selectedCore, this.selectedForm,
-        this.selectedPrefix, this.selectedSuffix,
-      );
-      for (const err of validation.errors) {
-        switch (err.field) {
-          case 'prefix': this.prefixSlot.setError(err.message); break;
-          case 'suffix': this.suffixSlot.setError(err.message); break;
-          case 'core': this.coreSlot.setError(err.message); break;
-          case 'form': this.formSlot.setError(err.message); break;
-          case 'combination':
-            // Highlight the most relevant slot
-            if (this.selectedPrefix) this.prefixSlot.setError(err.message);
-            if (this.selectedSuffix) this.suffixSlot.setError(err.message);
-            break;
-        }
-      }
+      this.currentSpell = null;
+      this.preview.showError(result.error, result.suggestion);
+      this.setCastEnabled(false);
     }
   }
 
-  // ── Text Input (power-user) ─────────────────────────────────────────────
+  // ── Prepare ─────────────────────────────────────────────────────────────
 
-  private createTextInput(): void {
-    const cx = ROOM_WIDTH / 2;
-    const inputY = ROOM_HEIGHT / 2 + 275;
-
-    this.dtxt(cx - 250, inputY - 2, 'Or type:', 9, '#555566');
-
-    const boxW = 380, boxH = 26;
-    this.inputBox = this.add.rectangle(cx + 30, inputY, boxW, boxH, 0x0a0818, 0.7).setDepth(215);
-    this.inputBox.setStrokeStyle(1, 0x3a2f5a, 0.5);
-
-    this.inputText = this.add.text(cx + 30 - boxW / 2 + 8, inputY, '', {
-      fontFamily: '"Courier New", monospace', fontSize: '12px', color: '#ccbbee',
-    }).setOrigin(0, 0.5).setDepth(216);
-
-    this.cursor = this.add.rectangle(cx + 30 - boxW / 2 + 8, inputY, 2, 14, 0xccbbee, 1)
-      .setDepth(216).setOrigin(0, 0.5);
-  }
-
-  private updateTextInput(): void {
-    // Sync text input from slot selections
-    const parts: string[] = [];
-    if (this.selectedPrefix) parts.push(PREFIX_REGISTRY[this.selectedPrefix].displayName.toUpperCase());
-    if (this.selectedCore) parts.push(this.selectedCore);
-    if (this.selectedForm) parts.push(this.selectedForm);
-    if (this.selectedSuffix) parts.push(SUFFIX_REGISTRY[this.selectedSuffix].displayName.toUpperCase());
-    this.currentInput = parts.join(' ');
-    this.inputText.setText(this.currentInput);
-
-    const boxLeft = ROOM_WIDTH / 2 + 30 - 190 + 8;
-    this.cursor.setX(boxLeft + this.inputText.width + 2);
-  }
-
-  // ── Prepare Button ──────────────────────────────────────────────────────
-
-  private createPrepareButton(): void {
-    const cx = ROOM_WIDTH / 2;
-    const btnY = ROOM_HEIGHT / 2 + 310;
-
-    this.prepareBtn = this.add.rectangle(cx, btnY, 200, 34, 0x224422, 0.8).setDepth(215);
-    this.prepareBtn.setStrokeStyle(1, 0x44aa44, 0.5);
-    this.prepareBtn.setInteractive({ useHandCursor: true });
-
-    this.prepareBtnText = this.add.text(cx, btnY, '✦ PREPARE SPELL ✦', {
-      fontFamily: '"Courier New", monospace',
-      fontSize: '12px',
-      color: '#66aa66',
-      fontStyle: 'bold',
-    }).setOrigin(0.5).setDepth(216);
-
-    this.prepareBtn.on('pointerover', () => {
-      this.prepareBtn.setFillStyle(0x336633, 0.9);
-    });
-    this.prepareBtn.on('pointerout', () => {
-      this.prepareBtn.setFillStyle(0x224422, 0.8);
-    });
-    this.prepareBtn.on('pointerdown', () => {
-      this.attemptPrepare();
-    });
-
-    this.setPrepareEnabled(false);
-  }
-
-  private setPrepareEnabled(enabled: boolean): void {
-    if (enabled) {
-      this.prepareBtn.setFillStyle(0x224422, 0.8);
-      this.prepareBtn.setStrokeStyle(1, 0x44aa44, 0.5);
-      this.prepareBtnText.setColor('#66aa66');
-      this.prepareBtn.setInteractive({ useHandCursor: true });
-    } else {
-      this.prepareBtn.setFillStyle(0x181818, 0.5);
-      this.prepareBtn.setStrokeStyle(1, 0x333333, 0.3);
-      this.prepareBtnText.setColor('#444444');
-      this.prepareBtn.disableInteractive();
-    }
-  }
-
-  private attemptPrepare(): void {
+  private prepareSpell(): void {
     if (!this.selectedCore || !this.selectedForm) return;
 
-    const result = SpellBuilder.build(
+    const spell = this.grimoireSystem.assignToSlot(
+      this.targetSlotIndex,
       this.selectedCore, this.selectedForm,
       this.selectedPrefix, this.selectedSuffix,
     );
 
-    if (result.success && result.spell) {
-      this.scene.get('GameScene').events.emit('spell-prepared', result.spell);
-      this.time.delayedCall(300, () => this.closeGrimoire());
+    if (spell) {
+      this.grimoireSystem.setActiveSlot(this.targetSlotIndex);
+      const gameScene = this.scene.get('GameScene');
+      gameScene.events.emit('spell-slots-updated');
+      this.requestClose();
     }
   }
 
-  // ── Controls ────────────────────────────────────────────────────────────
+  // ── Close ───────────────────────────────────────────────────────────────
 
-  private createControls(): void {
-    const cx = ROOM_WIDTH / 2;
-    this.dtxt(cx + 150, ROOM_HEIGHT / 2 + 310, 'ESC / TAB = Close', 10, '#444455');
-  }
+  private requestClose(): void {
+    // Clean up our UI objects
+    this.preview.destroy();
+    this.prefixRow.destroy();
+    this.coreRow.destroy();
+    this.formRow.destroy();
+    this.suffixRow.destroy();
 
-  // ── Input ───────────────────────────────────────────────────────────────
-
-  private setupInput(): void {
-    if (!this.input.keyboard) return;
-
-    this.input.keyboard.on('keydown', (event: KeyboardEvent) => {
-      if (!this.isOpen) return;
-      event.stopPropagation();
-
-      if (event.key === 'Escape' || event.key === 'Tab') {
-        event.preventDefault();
-        this.closeGrimoire();
-        return;
-      }
-
-      if (event.key === 'Enter') {
-        // Try text input first, then slot-based
-        if (this.currentInput.trim().length > 3) {
-          const result = SpellBuilder.parseAndBuild(this.currentInput);
-          if (result.success && result.spell) {
-            this.scene.get('GameScene').events.emit('spell-prepared', result.spell);
-            this.time.delayedCall(300, () => this.closeGrimoire());
-            return;
-          }
-        }
-        this.attemptPrepare();
-        return;
-      }
-
-      // Text input for power users
-      if (event.key === 'Backspace') {
-        event.preventDefault();
-        this.currentInput = this.currentInput.slice(0, -1);
-        this.syncFromTextInput();
-        return;
-      }
-
-      if (event.key.length === 1 && /[a-zA-Z\s]/.test(event.key)) {
-        if (this.currentInput.length < 45) {
-          this.currentInput += event.key.toUpperCase();
-          this.syncFromTextInput();
-        }
-      }
-    });
-  }
-
-  /**
-   * When the user types in the text box, try to parse and update the slot UI.
-   */
-  private syncFromTextInput(): void {
-    this.inputText.setText(this.currentInput);
-    const boxLeft = ROOM_WIDTH / 2 + 30 - 190 + 8;
-    this.cursor.setX(boxLeft + this.inputText.width + 2);
-
-    // Try to parse
-    const result = SpellBuilder.parseAndBuild(this.currentInput);
-    if (result.success && result.spell) {
-      this.selectedPrefix = result.spell.prefix?.id as PrefixId || null;
-      this.selectedCore = result.spell.core.id;
-      this.selectedForm = result.spell.form.id;
-      this.selectedSuffix = result.spell.suffix?.id as SuffixId || null;
-
-      this.updateSlotContent('prefix');
-      this.updateSlotContent('core');
-      this.updateSlotContent('form');
-      this.updateSlotContent('suffix');
-      this.rebuildPreview();
-
-      if (this.currentPicker) {
-        this.buildPicker(this.activeSlot);
-      }
-    }
-  }
-
-  // ── Helpers ─────────────────────────────────────────────────────────────
-
-  private dtxt(x: number, y: number, text: string, size: number, color: string, bold = false): Phaser.GameObjects.Text {
-    return this.add.text(x, y, text, {
-      fontFamily: '"Courier New", monospace',
-      fontSize: size + 'px',
-      color,
-      fontStyle: bold ? 'bold' : 'normal',
-    }).setDepth(210);
-  }
-
-  private startCursorBlink(): void {
-    this.cursorBlinkTimer = this.time.addEvent({
-      delay: 530, loop: true,
-      callback: () => { this.cursor.setAlpha(this.cursor.alpha > 0 ? 0 : 1); },
-    });
-  }
-
-  private closeGrimoire(): void {
-    if (!this.isOpen) return;
-    this.isOpen = false;
-    this.scene.get('GameScene').events.emit('grimoire-closed');
-    if (this.cursorBlinkTimer) this.cursorBlinkTimer.destroy();
-    this.scene.stop('GrimoireScene');
+    // Tell GameScene to close the grimoire (restores time, stops this scene)
+    const gameScene = this.scene.get('GameScene') as any;
+    gameScene.forceCloseGrimoire();
   }
 }

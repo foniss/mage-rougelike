@@ -1,24 +1,19 @@
 // src/config/constants.ts
-//
-// Backward-compatible constants that read initial values from balance.ts.
-// For hot-reload support, new code should use BalanceManager.get() directly.
 
 import { BALANCE } from './balance';
 
-// --- Room (layout) ---
+// --- Room ---
 export const ROOM_WIDTH = 1024;
 export const ROOM_HEIGHT = 768;
 export const WALL_THICKNESS = 32;
 
-// --- Player (from balance) ---
+// --- Player ---
 export const PLAYER_MAX_HP = BALANCE.player.maxHp;
 export const PLAYER_MAX_MANA = BALANCE.player.maxMana;
 export const PLAYER_SPEED = BALANCE.player.speed;
 export const PLAYER_RADIUS = BALANCE.player.radius;
 export const MANA_REGEN_RATE = BALANCE.player.manaRegenPerSecond;
 export const MANA_REGEN_INTERVAL = BALANCE.player.manaRegenTickMs;
-
-// --- Basic Attack (from balance) ---
 export const BASIC_ATTACK_DAMAGE = BALANCE.player.basicAttack.damage;
 export const BASIC_ATTACK_MANA_COST = BALANCE.player.basicAttack.manaCost;
 export const BASIC_ATTACK_COOLDOWN = BALANCE.player.basicAttack.cooldownMs;
@@ -26,7 +21,7 @@ export const PROJECTILE_SPEED = BALANCE.player.basicAttack.projectileSpeed;
 export const PROJECTILE_RADIUS = BALANCE.player.basicAttack.projectileRadius;
 export const PROJECTILE_LIFETIME = BALANCE.player.basicAttack.projectileLifetimeMs;
 
-// --- Enemy (from balance) ---
+// --- Enemy ---
 export const ENEMY_MAX_HP = BALANCE.enemy.default.maxHp;
 export const ENEMY_SPEED = BALANCE.enemy.default.speed;
 export const ENEMY_DAMAGE = BALANCE.enemy.default.contactDamage;
@@ -34,13 +29,15 @@ export const ENEMY_RADIUS = BALANCE.enemy.default.radius;
 export const ENEMY_ATTACK_COOLDOWN = BALANCE.enemy.default.contactCooldownMs;
 export const ENEMY_COUNT = BALANCE.enemy.spawnCount;
 
-// --- Combat (from balance) ---
+// --- Combat ---
 export const SPELL_CAST_COOLDOWN = BALANCE.combat.spellCastGlobalCooldownMs;
 
 // --- Grimoire ---
-export const GRIMOIRE_SLOW_FACTOR = 0.2;
+export const GRIMOIRE_TIME_SCALE = 0.12;
+export const SPELL_SLOT_COUNT = 3;
+export const SPELL_HISTORY_MAX = 5;
 
-// --- Visual-only constants ---
+// --- Visual constants ---
 export const BURN_TICK_INTERVAL = 500;
 export const BURN_PARTICLE_INTERVAL = 150;
 export const BURN_PARTICLE_COLORS = [0xff6600, 0xff4400, 0xff8800, 0xffaa00];
