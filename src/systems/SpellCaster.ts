@@ -8,6 +8,8 @@ import { Projectile } from '../entities/Projectile';
 import { StatusEffectSystem } from './StatusEffectSystem';
 import { FormExecutor, FormContext } from './FormExecutor';
 import { CoreEffectExecutor, EffectContext } from './CoreEffectExecutor';
+import { PrefixVisuals } from '../visuals/PrefixVisuals';
+import { SuffixVisuals } from '../visuals/SuffixVisuals';
 import {
   EchoesBehavior,
   DevouringBehavior,
@@ -33,6 +35,14 @@ export class SpellCaster {
   static cast(ctx: CastContext): void {
     const { scene, spell, player, enemies, projectiles, statusEffects } = ctx;
 
+    // Greater cast effect
+    if (spell.prefix?.behavior.type === 'greater') {
+      PrefixVisuals.renderGreaterCastEffect(
+        scene, player.sprite.x, player.sprite.y,
+        spell.visual, 30,
+      );
+    }
+
     const formCtx: FormContext = {
       scene, spell, player,
       targetX: ctx.targetX, targetY: ctx.targetY,
@@ -42,7 +52,7 @@ export class SpellCaster {
     // Execute the form
     FormExecutor.execute(formCtx);
 
-    // Handle suffix on-kill effects by watching for kills
+    // Handle suffix on-kill effects
     if (spell.suffix) {
       SpellCaster.setupSuffixWatchers(ctx);
     }
@@ -51,7 +61,11 @@ export class SpellCaster {
     if (spell.suffix?.behavior.type === 'echoes' && !spell.isEcho) {
       const echoBehavior = spell.suffix.behavior as EchoesBehavior;
       scene.time.delayedCall(echoBehavior.echoDelay, () => {
-        // Create echo spell with reduced damage
+        // Echo activation visual
+        SuffixVisuals.renderEchoActivation(
+          scene, player.sprite.x, player.sprite.y, spell.visual,
+        );
+
         const echoSpell: Spell = {
           ...spell,
           damage: Math.round(spell.damage * echoBehavior.echoDamageMultiplier),
@@ -67,7 +81,6 @@ export class SpellCaster {
     // Handle binding suffix
     if (spell.suffix?.behavior.type === 'binding') {
       const bindBehavior = spell.suffix.behavior as BindingBehavior;
-      // Apply binding to enemies near the target
       for (const enemy of enemies) {
         if (!enemy.alive) continue;
         const dist = Phaser.Math.Distance.Between(
@@ -80,26 +93,27 @@ export class SpellCaster {
           enemy.bindAnchorY = enemy.sprite.y;
           enemy.bindRadius = bindBehavior.bindRadius;
 
-          // Visual: binding circle
-          const bindCircle = scene.add.circle(
-            enemy.sprite.x, enemy.sprite.y,
-            bindBehavior.bindRadius, spell.visual.color, 0.1
-          ).setDepth(6).setStrokeStyle(1, spell.visual.color, 0.3);
+          // Create binding visual
+          const bindVisual = SuffixVisuals.createBindingVisual(
+            scene, enemy.sprite.x, enemy.sprite.y,
+            bindBehavior.bindRadius, bindBehavior.bindDuration,
+            spell.visual,
+          );
 
-          const updateBind = scene.time.addEvent({
+          // Update binding visual to follow enemy
+          const updateTimer = scene.time.addEvent({
             delay: 16, loop: true,
             callback: () => {
-              if (enemy.alive) bindCircle.setPosition(enemy.bindAnchorX, enemy.bindAnchorY);
+              if (enemy.alive && enemy.isBound) {
+                bindVisual.update(enemy.sprite.x, enemy.sprite.y);
+              }
             },
           });
 
           scene.time.delayedCall(bindBehavior.bindDuration * 1000, () => {
             enemy.isBound = false;
-            updateBind.destroy();
-            scene.tweens.add({
-              targets: bindCircle, alpha: 0, duration: 200,
-              onComplete: () => bindCircle.destroy(),
-            });
+            updateTimer.destroy();
+            bindVisual.destroy();
           });
         }
       }
@@ -108,14 +122,13 @@ export class SpellCaster {
 
   /**
    * Set up watchers for suffix on-kill effects.
-   * Listens for enemy-died events that happen shortly after casting.
    */
   private static setupSuffixWatchers(ctx: CastContext): void {
     const { scene, spell, enemies, statusEffects } = ctx;
     if (!spell.suffix) return;
 
     const behavior = spell.suffix.behavior;
-    const watchDuration = 3000; // How long after cast to watch for kills
+    const watchDuration = 3000;
 
     const onEnemyDied = (enemy: Enemy) => {
       if (behavior.type === 'devouring') {
@@ -125,16 +138,15 @@ export class SpellCaster {
             ctx.player.maxMana,
             ctx.player.mana + devBehavior.manaRestoreOnKill
           );
-          // Visual feedback
-          const manaText = scene.add.text(
-            ctx.player.sprite.x, ctx.player.sprite.y - 30,
-            `+${devBehavior.manaRestoreOnKill} MP`,
-            { fontFamily: '"Courier New", monospace', fontSize: '12px', color: '#4488ff', fontStyle: 'bold' }
-          ).setOrigin(0.5).setDepth(50);
-          scene.tweens.add({
-            targets: manaText, y: manaText.y - 20, alpha: 0, duration: 800,
-            onComplete: () => manaText.destroy(),
-          });
+
+          // Devouring visual
+          SuffixVisuals.renderDevouringEffect(
+            scene,
+            enemy.sprite.x, enemy.sprite.y,
+            ctx.player.sprite.x, ctx.player.sprite.y,
+            devBehavior.manaRestoreOnKill,
+            spell.visual,
+          );
         }
       }
 
@@ -157,24 +169,26 @@ export class SpellCaster {
           if (closest) {
             targetsLeft--;
             const seekDmg = Math.round(spell.damage * reapBehavior.seekDamagePercent);
-            closest.takeDamage(seekDmg);
 
-            // Seek visual
-            const seekLine = scene.add.line(0, 0,
-              fromX, fromY, closest.sprite.x, closest.sprite.y,
-              spell.visual.color, 0.5
-            ).setOrigin(0, 0).setLineWidth(1).setDepth(20);
-            scene.tweens.add({
-              targets: seekLine, alpha: 0, duration: 300,
-              onComplete: () => seekLine.destroy(),
+            // Reaping visual
+            SuffixVisuals.renderReapingSeek(
+              scene, fromX, fromY,
+              closest.sprite.x, closest.sprite.y,
+              spell.visual, reapBehavior.seekDamagePercent,
+            );
+
+            // Delay damage slightly so visual plays first
+            const target = closest;
+            scene.time.delayedCall(250, () => {
+              if (target.alive) {
+                target.takeDamage(seekDmg);
+                const eCtx: EffectContext = {
+                  scene, spell, sourceX: fromX, sourceY: fromY,
+                  enemies, statusEffects,
+                };
+                CoreEffectExecutor.apply(eCtx, target);
+              }
             });
-
-            // Apply core effect
-            const eCtx: EffectContext = {
-              scene, spell, sourceX: fromX, sourceY: fromY,
-              enemies, statusEffects,
-            };
-            CoreEffectExecutor.apply(eCtx, closest);
           }
         };
 
@@ -185,16 +199,10 @@ export class SpellCaster {
         const detBehavior = behavior as DetonationBehavior;
         const ex = enemy.sprite.x, ey = enemy.sprite.y;
 
-        // Explosion visual
-        const explosion = scene.add.circle(ex, ey, 10, spell.visual.color, 0.4);
-        explosion.setDepth(20).setStrokeStyle(2, spell.visual.glowColor, 0.7);
-        scene.tweens.add({
-          targets: explosion,
-          scaleX: detBehavior.explosionRadius / 10,
-          scaleY: detBehavior.explosionRadius / 10,
-          alpha: 0, duration: 300, ease: 'Power2',
-          onComplete: () => explosion.destroy(),
-        });
+        // Detonation visual
+        SuffixVisuals.renderDetonationExplosion(
+          scene, ex, ey, detBehavior.explosionRadius, spell.visual,
+        );
 
         const detDmg = Math.round(spell.damage * detBehavior.explosionDamagePercent);
         for (const e of enemies) {
@@ -202,15 +210,12 @@ export class SpellCaster {
           const d = Phaser.Math.Distance.Between(ex, ey, e.sprite.x, e.sprite.y);
           if (d <= detBehavior.explosionRadius) {
             e.takeDamage(detDmg);
-            // DO NOT chain detonate (canChainDetonate is false)
           }
         }
       }
     };
 
     scene.events.on('enemy-died', onEnemyDied);
-
-    // Stop watching after watchDuration
     scene.time.delayedCall(watchDuration, () => {
       scene.events.off('enemy-died', onEnemyDied);
     });

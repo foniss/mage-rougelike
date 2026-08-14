@@ -26,6 +26,7 @@ export class GameScene extends Phaser.Scene {
   private gameOverText!: Phaser.GameObjects.Text;
   private restartKey!: Phaser.Input.Keyboard.Key;
   private tabKey!: Phaser.Input.Keyboard.Key;
+  private devTestKey!: Phaser.Input.Keyboard.Key;
   private feedbackText!: Phaser.GameObjects.Text;
   private feedbackTimer: Phaser.Time.TimerEvent | null = null;
 
@@ -122,6 +123,7 @@ export class GameScene extends Phaser.Scene {
       this.restartKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
       this.tabKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TAB);
       this.input.keyboard.addCapture('TAB');
+      this.devTestKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F12);
     }
   }
 
@@ -135,44 +137,16 @@ export class GameScene extends Phaser.Scene {
 
   private handleSpellCast(pointer: Phaser.Input.Pointer): void {
     const spell = this.player.preparedSpell!;
-
-    // Melee and placement don't need enemy targeting
-    if (spell.targetingType === 'melee') {
+    if (spell.targetingType === 'melee' || spell.targetingType === 'placement') {
       const result = this.player.canCastPreparedSpell();
-      if (result === CastResult.SUCCESS) {
-        this.executePreparedSpell(pointer.worldX, pointer.worldY);
-      } else {
-        this.showCastError(result);
-      }
+      if (result === CastResult.SUCCESS) this.executePreparedSpell(pointer.worldX, pointer.worldY);
+      else this.showCastError(result);
       return;
     }
-
-    if (spell.targetingType === 'placement') {
-      const result = this.player.canCastPreparedSpell();
-      if (result === CastResult.SUCCESS) {
-        this.executePreparedSpell(pointer.worldX, pointer.worldY);
-      } else {
-        this.showCastError(result);
-      }
-      return;
-    }
-
-    // For aoe, line, projectile — try to find an enemy target
     const enemy = this.findEnemyAtPoint(pointer.worldX, pointer.worldY);
-    if (!enemy) {
-      // Allow casting line/aoe/projectile toward click point even without target
-      const result = this.player.canCastPreparedSpell();
-      if (result === CastResult.SUCCESS) {
-        this.executePreparedSpell(pointer.worldX, pointer.worldY);
-      } else {
-        this.showCastError(result);
-      }
-      return;
-    }
-
     const result = this.player.canCastPreparedSpell();
     if (result === CastResult.SUCCESS) {
-      this.executePreparedSpell(enemy.sprite.x, enemy.sprite.y);
+      this.executePreparedSpell(enemy ? enemy.sprite.x : pointer.worldX, enemy ? enemy.sprite.y : pointer.worldY);
     } else {
       this.showCastError(result);
     }
@@ -294,6 +268,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(): void {
+    // Dev test mode
+    if (this.devTestKey && Phaser.Input.Keyboard.JustDown(this.devTestKey)) {
+      this.scene.pause('GameScene');
+      this.scene.launch('DevTestScene');
+      return;
+    }
+
     if (this.tabKey && Phaser.Input.Keyboard.JustDown(this.tabKey)) {
       if (!this.gameOver) {
         if (this.grimoireOpen) { this.scene.stop('GrimoireScene'); this.closeGrimoire(); }

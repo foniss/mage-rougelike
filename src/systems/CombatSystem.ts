@@ -6,6 +6,7 @@ import { Enemy } from '../entities/Enemy';
 import { Projectile } from '../entities/Projectile';
 import { SpellCaster, CastContext } from './SpellCaster';
 import { StatusEffectSystem } from './StatusEffectSystem';
+import { PrefixVisuals } from '../visuals/PrefixVisuals';
 import { ENEMY_DAMAGE, ENEMY_RADIUS } from '../config/constants';
 import { OrbVisual } from '../config/spellComponents';
 
@@ -50,7 +51,6 @@ export class CombatSystem {
             enemy.sprite.x, enemy.sprite.y
           );
           if (dist <= ov.damageRadius) {
-            // Check tick timing via data
             const lastTick = proj.sprite.getData('lastAuraTick') || 0;
             const now = this.scene.time.now;
             if (now - lastTick >= ov.damageTickInterval) {
@@ -60,13 +60,9 @@ export class CombatSystem {
 
               if (proj.spell) {
                 const ctx: CastContext = {
-                  scene: this.scene,
-                  spell: proj.spell,
-                  player: this.player,
-                  targetX: enemy.sprite.x,
-                  targetY: enemy.sprite.y,
-                  enemies: this.enemies,
-                  projectiles: this.projectiles,
+                  scene: this.scene, spell: proj.spell, player: this.player,
+                  targetX: enemy.sprite.x, targetY: enemy.sprite.y,
+                  enemies: this.enemies, projectiles: this.projectiles,
                   statusEffects: this.statusEffects,
                 };
                 SpellCaster.applyOnHit(ctx, enemy);
@@ -88,21 +84,16 @@ export class CombatSystem {
         const hitRadius = proj.spell?.form.id === 'ORB' ? 20 : 24;
 
         if (dist < hitRadius) {
-          // Skip if this enemy was already hit by this piercing projectile
-          const enemyId = enemy.sprite.x + ',' + enemy.sprite.y + ',' + enemy.hp;
+          const enemyId = `${Math.round(enemy.sprite.x)},${Math.round(enemy.sprite.y)},${enemy.hp}`;
           if (proj.maxPierceTargets > 0 && proj.hitEnemies.has(enemyId)) continue;
 
           enemy.takeDamage(proj.damage);
 
           if (proj.spell) {
             const ctx: CastContext = {
-              scene: this.scene,
-              spell: proj.spell,
-              player: this.player,
-              targetX: enemy.sprite.x,
-              targetY: enemy.sprite.y,
-              enemies: this.enemies,
-              projectiles: this.projectiles,
+              scene: this.scene, spell: proj.spell, player: this.player,
+              targetX: enemy.sprite.x, targetY: enemy.sprite.y,
+              enemies: this.enemies, projectiles: this.projectiles,
               statusEffects: this.statusEffects,
             };
             SpellCaster.applyOnHit(ctx, enemy);
@@ -112,6 +103,19 @@ export class CombatSystem {
           if (proj.maxPierceTargets > 0) {
             proj.hitEnemies.add(enemyId);
             proj.pierceCount++;
+
+            // Piercing visual feedback
+            if (proj.spell) {
+              PrefixVisuals.renderPierceMoment(
+                this.scene,
+                proj.sprite.x, proj.sprite.y,
+                enemy.sprite.x, enemy.sprite.y,
+                proj.spell.visual,
+                proj.pierceCount,
+                proj.maxPierceTargets,
+              );
+            }
+
             proj.damage = Math.round(proj.damage * proj.damageRetainPercent);
             if (proj.pierceCount >= proj.maxPierceTargets) {
               proj.destroy();

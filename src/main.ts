@@ -5,6 +5,7 @@ import { BootScene } from './scenes/BootScene';
 import { GameScene } from './scenes/GameScene';
 import { HUDScene } from './scenes/HUDScene';
 import { GrimoireScene } from './scenes/GrimoireScene';
+import { DevTestScene } from './scenes/DevTestScene';
 import { ROOM_WIDTH, ROOM_HEIGHT } from './config/constants';
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -20,7 +21,7 @@ const config: Phaser.Types.Core.GameConfig = {
       debug: false,
     },
   },
-  scene: [BootScene, GameScene, HUDScene, GrimoireScene],
+  scene: [BootScene, GameScene, HUDScene, GrimoireScene, DevTestScene],
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
