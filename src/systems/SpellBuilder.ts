@@ -8,85 +8,37 @@ import {
   identifyWord, identifySuffix,
 } from '../config/spellComponents';
 import { SpellValidator } from './SpellValidator';
-
-// ── Runtime Spell Object ──────────────────────────────────────────────────
+import { calcManaCost, calcCooldown, calcDamage } from '../config/formulas';
 
 export interface Spell {
-  name: string;
-  displayName: string;
-  core: CoreComponent;
-  form: FormComponent;
-  prefix: PrefixComponent | null;
-  suffix: SuffixComponent | null;
-  damage: number;
-  manaCost: number;
-  cooldown: number;
-  statusEffect: StatusEffectConfig;
-  targetingType: TargetingType;
-  visual: VisualConfig;
-  isEcho?: boolean;
+  name: string; displayName: string;
+  core: CoreComponent; form: FormComponent;
+  prefix: PrefixComponent | null; suffix: SuffixComponent | null;
+  damage: number; manaCost: number; cooldown: number;
+  statusEffect: StatusEffectConfig; targetingType: TargetingType;
+  visual: VisualConfig; isEcho?: boolean;
 }
 
-export interface BuildResult {
-  success: boolean;
-  spell: Spell | null;
-  error: string;
-  suggestion?: string;
-}
-
+export interface BuildResult { success: boolean; spell: Spell | null; error: string; suggestion?: string; }
 export type ParseResult = BuildResult;
-
-// ═══════════════════════════════════════════════════════════════════════════
 
 export class SpellBuilder {
 
-  /**
-   * Build a spell from explicit component IDs.
-   * Delegates validation to SpellValidator.
-   */
-  static build(
-    coreId: CoreId,
-    formId: FormId,
-    prefixId?: PrefixId | null,
-    suffixId?: SuffixId | null,
-  ): BuildResult {
-    // Validate using the dedicated validator
+  static build(coreId: CoreId, formId: FormId, prefixId?: PrefixId | null, suffixId?: SuffixId | null): BuildResult {
     const validation = SpellValidator.validate(coreId, formId, prefixId, suffixId);
-
     if (!validation.valid) {
-      const firstError = validation.errors[0];
-      return {
-        success: false,
-        spell: null,
-        error: firstError.message,
-        suggestion: firstError.suggestion,
-      };
+      const e = validation.errors[0];
+      return { success: false, spell: null, error: e.message, suggestion: e.suggestion };
     }
-
-    // Assemble the spell
-    const spell = SpellBuilder.assemble(
-      validation.core!,
-      validation.form!,
-      validation.prefix,
-      validation.suffix,
-    );
-
-    return { success: true, spell, error: '' };
+    return { success: true, spell: SpellBuilder.assemble(validation.core!, validation.form!, validation.prefix, validation.suffix), error: '' };
   }
 
-  /**
-   * Parse raw text input and build a spell.
-   */
   static parseAndBuild(raw: string): ParseResult {
     const cleaned = raw.toUpperCase().trim();
     if (cleaned === '') return { success: false, spell: null, error: 'Enter a spell name.' };
-
     const words = cleaned.split(/\s+/);
-    if (words.length > 6) {
-      return { success: false, spell: null, error: 'Too many words.' };
-    }
+    if (words.length > 6) return { success: false, spell: null, error: 'Too many words.' };
 
-    // Try to find suffix (can be 2 words like "OF DEVOURING")
     let suffixId: SuffixId | null = null;
     let remainingWords = [...words];
 
@@ -111,10 +63,7 @@ export class SpellBuilder {
       if (remainingWords.length === 0 && suffixId) return { success: false, spell: null, error: 'Missing Core and Form.' };
       return { success: false, spell: null, error: 'Need at least Core + Form.' };
     }
-
-    if (remainingWords.length > 3) {
-      return { success: false, spell: null, error: 'Too many words before suffix.' };
-    }
+    if (remainingWords.length > 3) return { success: false, spell: null, error: 'Too many words before suffix.' };
 
     const identified = remainingWords.map(w => ({ word: w, match: identifyWord(w) }));
     for (const item of identified) {
@@ -125,28 +74,26 @@ export class SpellBuilder {
     const forms = identified.filter(i => i.match!.type === 'form');
     const prefixes = identified.filter(i => i.match!.type === 'prefix');
 
-    if (cores.length === 0) return { success: false, spell: null, error: 'Missing Core.', suggestion: 'Add a Core (FIRE, ICE, WIND, STORM, COSMIC).' };
+    if (cores.length === 0) return { success: false, spell: null, error: 'Missing Core.' };
     if (cores.length > 1) return { success: false, spell: null, error: 'Only one Core allowed.' };
-    if (forms.length === 0) return { success: false, spell: null, error: 'Missing Form.', suggestion: 'Add a Form (BLADE, BEAM, ORB, MINE, NOVA).' };
+    if (forms.length === 0) return { success: false, spell: null, error: 'Missing Form.' };
     if (forms.length > 1) return { success: false, spell: null, error: 'Only one Form allowed.' };
     if (prefixes.length > 1) return { success: false, spell: null, error: 'Only one Prefix allowed.' };
 
     return SpellBuilder.build(
-      cores[0].match!.id as CoreId,
-      forms[0].match!.id as FormId,
-      prefixes.length > 0 ? prefixes[0].match!.id as PrefixId : null,
-      suffixId,
+      cores[0].match!.id as CoreId, forms[0].match!.id as FormId,
+      prefixes.length > 0 ? prefixes[0].match!.id as PrefixId : null, suffixId,
     );
   }
 
-  // ═════════════════════════════════════════════════════════════════════════
-
+  /**
+   * Assemble a spell using centralized formulas from formulas.ts.
+   */
   private static assemble(
-    core: CoreComponent,
-    form: FormComponent,
-    prefix: PrefixComponent | null,
-    suffix: SuffixComponent | null,
+    core: CoreComponent, form: FormComponent,
+    prefix: PrefixComponent | null, suffix: SuffixComponent | null,
   ): Spell {
+    // Name
     const nameParts: string[] = [];
     if (prefix) nameParts.push(prefix.displayName);
     nameParts.push(core.displayName);
@@ -154,23 +101,32 @@ export class SpellBuilder {
     if (suffix) nameParts.push(suffix.displayName);
     const name = nameParts.join(' ');
 
-    let damage = core.baseDamage * form.damageMultiplier;
-    if (prefix) {
-      damage *= prefix.damageMultiplier;
-      if (prefix.behavior.type === 'greater') damage += prefix.behavior.extraDamageFlat;
-    }
-    if (suffix) damage *= suffix.damageMultiplier;
-    damage = Math.round(damage);
+    // Damage — uses centralized formula
+    const prefixExtraFlat = prefix?.behavior.type === 'greater' ? prefix.behavior.extraDamageFlat : 0;
+    const damage = calcDamage(
+      core.baseDamage,
+      form.damageMultiplier,
+      prefix?.damageMultiplier ?? 1,
+      prefixExtraFlat,
+      suffix?.damageMultiplier ?? 1,
+    );
 
-    let manaCost = core.manaCost + form.manaCost;
-    if (prefix) manaCost += prefix.manaCost;
-    if (suffix) manaCost += suffix.manaCost;
+    // Mana — uses centralized formula
+    const manaCost = calcManaCost(
+      core.manaCost,
+      form.manaCost,
+      prefix?.manaCost ?? 0,
+      suffix?.manaCost ?? 0,
+    );
 
-    let cooldown = form.cooldown;
-    if (prefix) cooldown *= prefix.cooldownMultiplier;
-    if (suffix) cooldown *= suffix.cooldownMultiplier;
-    cooldown = Math.round(cooldown);
+    // Cooldown — uses centralized formula
+    const cooldown = calcCooldown(
+      form.cooldown,
+      prefix?.cooldownMultiplier ?? 1,
+      suffix?.cooldownMultiplier ?? 1,
+    );
 
+    // Visual
     const visual: VisualConfig = { ...core.visual };
     if (prefix?.visual) {
       if (prefix.visual.color !== undefined) visual.color = prefix.visual.color;
