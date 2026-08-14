@@ -2,6 +2,7 @@
 
 import Phaser from 'phaser';
 import { GrimoireSystem } from '../systems/GrimoireSystem';
+import { SpellBuilder } from '../systems/SpellBuilder';
 import { ROOM_WIDTH, ROOM_HEIGHT } from '../config/constants';
 
 export class GrimoireScene extends Phaser.Scene {
@@ -13,11 +14,11 @@ export class GrimoireScene extends Phaser.Scene {
   private inputText!: Phaser.GameObjects.Text;
   private cursor!: Phaser.GameObjects.Rectangle;
   private feedbackText!: Phaser.GameObjects.Text;
+  private suggestionText!: Phaser.GameObjects.Text;
+  private livePreviewText!: Phaser.GameObjects.Text;
   private currentInput = '';
   private cursorBlinkTimer!: Phaser.Time.TimerEvent;
   private isOpen = false;
-  private scrollY = 0;
-  private contentContainer!: Phaser.GameObjects.Container;
 
   constructor() { super({ key: 'GrimoireScene' }); }
 
@@ -28,7 +29,6 @@ export class GrimoireScene extends Phaser.Scene {
   create(): void {
     this.isOpen = true;
     this.currentInput = '';
-    this.scrollY = 0;
 
     this.createOverlay();
     this.createPanel();
@@ -74,19 +74,26 @@ export class GrimoireScene extends Phaser.Scene {
       fontFamily: '"Courier New", monospace', fontSize: '16px', color: '#e8d8ff',
     }).setOrigin(0, 0.5).setDepth(211);
     this.cursor = this.add.rectangle(cx - boxW / 2 + 12, boxY, 2, 18, 0xe8d8ff, 1).setDepth(211).setOrigin(0, 0.5);
+
+    // Live preview — shows computed stats while typing
+    this.livePreviewText = this.txt(cx, boxY + 24, '', 10, '#666688').setOrigin(0.5);
+    this.livePreviewText.setDepth(211);
   }
 
   private createFeedback(): void {
-    this.feedbackText = this.txt(ROOM_WIDTH / 2, ROOM_HEIGHT / 2 - 193, '', 13, '#ff4444', true).setOrigin(0.5);
+    const cx = ROOM_WIDTH / 2, fbY = ROOM_HEIGHT / 2 - 185;
+    this.feedbackText = this.txt(cx, fbY, '', 13, '#ff4444', true).setOrigin(0.5);
     this.feedbackText.setDepth(212).setAlpha(0);
+
+    this.suggestionText = this.txt(cx, fbY + 18, '', 10, '#888888').setOrigin(0.5);
+    this.suggestionText.setDepth(212).setAlpha(0);
   }
 
   private createComponentDisplay(): void {
     const cx = ROOM_WIDTH / 2;
-    const startY = ROOM_HEIGHT / 2 - 175;
+    const startY = ROOM_HEIGHT / 2 - 155;
     const colW = 150;
 
-    // ── Cores ──
     const coreX = cx - 310;
     this.txt(coreX, startY, 'CORES', 10, '#ffaaaa', true);
     let y = startY + 16;
@@ -98,7 +105,6 @@ export class GrimoireScene extends Phaser.Scene {
       y += 35;
     }
 
-    // ── Forms ──
     const formX = coreX + colW;
     this.txt(formX, startY, 'FORMS', 10, '#ffaaaa', true);
     y = startY + 16;
@@ -109,20 +115,18 @@ export class GrimoireScene extends Phaser.Scene {
       y += 35;
     }
 
-    // ── Prefixes ──
     const prefX = formX + colW;
     this.txt(prefX, startY, 'PREFIXES', 10, '#88cc88', true);
     y = startY + 16;
     for (const prefix of this.grimoireSystem.getPrefixes()) {
       this.txt(prefX, y, prefix.displayName.toUpperCase(), 10, '#aaccaa', true);
       this.txt(prefX + 2, y + 12, prefix.description, 7, '#555577');
-      const compat = prefix.compatibleForms === 'all' ? 'All' :
-        (prefix.compatibleForms as string[]).join(',');
+      const compat = prefix.compatibleForms === 'all' ? 'All'
+        : (prefix.compatibleForms as string[]).join(', ');
       this.txt(prefX + 2, y + 21, `MP:+${prefix.manaCost} [${compat}]`, 7, '#444466');
       y += 33;
     }
 
-    // ── Suffixes ──
     const sufX = prefX + colW + 10;
     this.txt(sufX, startY, 'SUFFIXES', 10, '#ccaa88', true);
     y = startY + 16;
@@ -133,12 +137,10 @@ export class GrimoireScene extends Phaser.Scene {
       y += 33;
     }
 
-    // Dividers
     for (const dx of [coreX + colW - 10, formX + colW - 10, prefX + colW]) {
       this.add.rectangle(dx, startY + 100, 1, 200, 0x3a2f5a, 0.15).setDepth(210);
     }
 
-    // Examples
     const exY = ROOM_HEIGHT / 2 + 245;
     this.add.rectangle(cx, exY - 10, 500, 1, 0x3a2f5a, 0.3).setDepth(210);
     this.txt(cx, exY + 2, 'FIRE BLADE  ·  HOMING ICE ORB  ·  GREATER STORM NOVA OF ECHOES', 9, '#555577').setOrigin(0.5);
@@ -175,23 +177,71 @@ export class GrimoireScene extends Phaser.Scene {
     this.inputText.setText(this.currentInput);
     this.cursor.setX(ROOM_WIDTH / 2 - 250 + 12 + this.inputText.width + 2);
     this.feedbackText.setAlpha(0);
+    this.suggestionText.setAlpha(0);
+
+    // Live validation preview
+    this.updateLivePreview();
+  }
+
+  /**
+   * While the user types, try to parse and show either:
+   * - Computed stats if the spell is valid
+   * - The first validation error if invalid
+   */
+  private updateLivePreview(): void {
+    const input = this.currentInput.trim();
+    if (input.length < 3) {
+      this.livePreviewText.setText('').setAlpha(0);
+      this.inputBox.setStrokeStyle(1, 0x4a3f6b, 0.8);
+      return;
+    }
+
+    const result = SpellBuilder.parseAndBuild(input);
+
+    if (result.success && result.spell) {
+      const s = result.spell;
+      const parts = [`DMG:${s.damage}`, `MP:${s.manaCost}`, `CD:${s.cooldown}ms`];
+      if (s.statusEffect.type !== 'none') parts.push(s.statusEffect.type.toUpperCase());
+      this.livePreviewText.setText(`✓ ${s.name}  —  ${parts.join('  ')}`);
+      this.livePreviewText.setColor('#66aa66').setAlpha(1);
+      this.inputBox.setStrokeStyle(1, 0x44aa44, 0.6);
+    } else {
+      // Show the error as dim text under the input
+      this.livePreviewText.setText(result.error || '');
+      this.livePreviewText.setColor('#884444').setAlpha(0.7);
+      this.inputBox.setStrokeStyle(1, 0x4a3f6b, 0.8);
+    }
   }
 
   private attemptPrepareSpell(): void {
     const result = this.grimoireSystem.attemptPrepare(this.currentInput);
+
     if (result.success) {
       this.feedbackText.setText('✦ ' + result.spell!.name + ' ✦').setColor('#88ff88').setAlpha(1);
+      this.suggestionText.setAlpha(0);
+
       this.scene.get('GameScene').events.emit('spell-prepared', result.spell);
       this.time.delayedCall(600, () => this.closeGrimoire());
     } else {
       this.feedbackText.setText(result.message).setColor('#ff4444').setAlpha(1);
+
+      // Show suggestion if available
+      // The GrimoireSystem wraps SpellBuilder, so we need to get suggestion from a direct parse
+      const parseResult = SpellBuilder.parseAndBuild(this.currentInput);
+      if (parseResult.suggestion) {
+        this.suggestionText.setText(parseResult.suggestion).setColor('#888888').setAlpha(0.8);
+      } else {
+        this.suggestionText.setAlpha(0);
+      }
+
       this.tweens.add({
         targets: this.inputBox, x: { from: this.inputBox.x - 4, to: this.inputBox.x + 4 },
         duration: 50, yoyo: true, repeat: 3,
         onComplete: () => this.inputBox.setX(ROOM_WIDTH / 2),
       });
-      this.time.delayedCall(2500, () => {
-        this.tweens.add({ targets: this.feedbackText, alpha: 0, duration: 300 });
+
+      this.time.delayedCall(3000, () => {
+        this.tweens.add({ targets: [this.feedbackText, this.suggestionText], alpha: 0, duration: 300 });
       });
     }
   }
