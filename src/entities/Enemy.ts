@@ -14,13 +14,20 @@ export class Enemy {
   public alive: boolean = true;
   public lastContactDamageTime: number = 0;
 
+  // Status flags for external systems
+  public isFrozen: boolean = false;
+  public isBound: boolean = false;
+  public isStunned: boolean = false;
+  public bindAnchorX: number = 0;
+  public bindAnchorY: number = 0;
+  public bindRadius: number = 30;
+
   private scene: Phaser.Scene;
   private targetSprite: Phaser.Physics.Arcade.Sprite | null = null;
   private hpBarBg: Phaser.GameObjects.Sprite;
   private hpBarFill: Phaser.GameObjects.Sprite;
   private maxHpBarWidth: number;
 
-  // Speed management — used by StatusEffectSystem
   private baseSpeed: number = ENEMY_SPEED;
   private speedMultiplier: number = 1;
 
@@ -36,9 +43,8 @@ export class Enemy {
     this.sprite.setDepth(9);
     this.sprite.setData('owner', this);
 
-    // HP bar
     this.maxHpBarWidth = ENEMY_RADIUS * 2 + 6;
-    this.hpBarBg   = scene.add.sprite(x, y - ENEMY_RADIUS - 10, 'enemy-hp-bg');
+    this.hpBarBg = scene.add.sprite(x, y - ENEMY_RADIUS - 10, 'enemy-hp-bg');
     this.hpBarFill = scene.add.sprite(x, y - ENEMY_RADIUS - 10, 'enemy-hp-fill');
     this.hpBarBg.setDepth(15);
     this.hpBarFill.setDepth(16);
@@ -57,15 +63,41 @@ export class Enemy {
   }
 
   private moveTowardTarget(): void {
+    if (this.isFrozen || this.isStunned) {
+      this.sprite.setVelocity(0, 0);
+      return;
+    }
+
     if (!this.targetSprite || !this.targetSprite.active) {
       this.sprite.setVelocity(0, 0);
       return;
     }
+
+    const currentSpeed = this.baseSpeed * this.speedMultiplier;
+
+    // If bound, clamp position to bind radius
+    if (this.isBound) {
+      const distFromAnchor = Phaser.Math.Distance.Between(
+        this.sprite.x, this.sprite.y,
+        this.bindAnchorX, this.bindAnchorY
+      );
+      if (distFromAnchor > this.bindRadius) {
+        const angleToAnchor = Phaser.Math.Angle.Between(
+          this.sprite.x, this.sprite.y,
+          this.bindAnchorX, this.bindAnchorY
+        );
+        this.sprite.setVelocity(
+          Math.cos(angleToAnchor) * currentSpeed,
+          Math.sin(angleToAnchor) * currentSpeed
+        );
+        return;
+      }
+    }
+
     const angle = Phaser.Math.Angle.Between(
       this.sprite.x, this.sprite.y,
       this.targetSprite.x, this.targetSprite.y
     );
-    const currentSpeed = this.baseSpeed * this.speedMultiplier;
     this.sprite.setVelocity(
       Math.cos(angle) * currentSpeed,
       Math.sin(angle) * currentSpeed
@@ -75,7 +107,6 @@ export class Enemy {
   private updateHpBar(): void {
     const barY = this.sprite.y - ENEMY_RADIUS - 12;
     this.hpBarBg.setPosition(this.sprite.x, barY);
-
     const hpRatio = this.hp / this.maxHp;
     this.hpBarFill.setScale(hpRatio, 1);
     this.hpBarFill.setPosition(
@@ -85,10 +116,9 @@ export class Enemy {
   }
 
   canDealContactDamage(now: number): boolean {
+    if (this.isFrozen || this.isStunned) return false;
     return now - this.lastContactDamageTime >= 1000;
   }
-
-  // ── Speed Control (called by StatusEffectSystem) ──────────────────────────
 
   setSpeedMultiplier(multiplier: number): void {
     this.speedMultiplier = multiplier;
@@ -98,17 +128,24 @@ export class Enemy {
     return this.speedMultiplier;
   }
 
-  // ── Damage ────────────────────────────────────────────────────────────────
+  applyKnockback(angle: number, force: number, duration: number): void {
+    if (!this.alive || this.isFrozen) return;
+    this.sprite.setVelocity(
+      Math.cos(angle) * force,
+      Math.sin(angle) * force
+    );
+    this.isStunned = true;
+    this.scene.time.delayedCall(duration * 1000, () => {
+      this.isStunned = false;
+    });
+  }
 
   takeDamage(amount: number): void {
     if (!this.alive) return;
     this.hp -= amount;
-
-    // Show HP bar
     this.hpBarBg.setAlpha(0.8);
     this.hpBarFill.setAlpha(1);
 
-    // Brief white flash (status systems may override with their own tint)
     this.sprite.setTint(0xffffff);
     this.scene.time.delayedCall(80, () => {
       if (this.sprite.active) this.sprite.clearTint();
@@ -120,24 +157,14 @@ export class Enemy {
     }
   }
 
-  // ── Death ─────────────────────────────────────────────────────────────────
-
   private die(): void {
     this.alive = false;
-
-    // Notify the scene (GameScene listens to clean up effects)
     this.scene.events.emit('enemy-died', this);
-
     this.scene.tweens.add({
       targets: [this.sprite, this.hpBarBg, this.hpBarFill],
-      alpha: 0,
-      scaleX: 0.2,
-      scaleY: 0.2,
-      duration: 300,
-      ease: 'Power2',
-      onComplete: () => {
-        this.destroy();
-      },
+      alpha: 0, scaleX: 0.2, scaleY: 0.2,
+      duration: 300, ease: 'Power2',
+      onComplete: () => { this.destroy(); },
     });
   }
 

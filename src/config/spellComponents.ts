@@ -1,16 +1,8 @@
 // src/config/spellComponents.ts
-//
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  CENTRALIZED SPELL COMPONENT REGISTRY
-//
-//  Spell grammar:  [Prefix] + Core + Form + [Suffix]
-//
-//  To add a new component:
-//    1. Add a new entry to the appropriate registry (CORES, FORMS, etc.)
-//    2. The rest of the engine picks it up automatically.
-//
-//  To modify balance:
-//    Change numbers here. Nothing else needs to change.
+//  Grammar: [Prefix] + Core + Form + [Suffix]
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ── Enums ─────────────────────────────────────────────────────────────────
@@ -18,30 +10,41 @@
 export enum CoreId {
   FIRE = 'FIRE',
   ICE = 'ICE',
-  LIGHTNING = 'LIGHTNING',
+  WIND = 'WIND',
+  STORM = 'STORM',
+  COSMIC = 'COSMIC',
 }
 
 export enum FormId {
-  BOLT = 'BOLT',
-  NOVA = 'NOVA',
+  BLADE = 'BLADE',
   BEAM = 'BEAM',
+  ORB = 'ORB',
+  MINE = 'MINE',
+  NOVA = 'NOVA',
 }
 
 export enum PrefixId {
+  HOMING = 'HOMING',
+  SPLITTING = 'SPLITTING',
   GREATER = 'GREATER',
-  SWIFT = 'SWIFT',
-}
-
-export enum SuffixId {
-  SEEKING = 'SEEKING',
+  EXPANDING = 'EXPANDING',
+  RETURNING = 'RETURNING',
   PIERCING = 'PIERCING',
 }
 
-export type TargetingType = 'projectile' | 'aoe' | 'line';
+export enum SuffixId {
+  OF_DEVOURING = 'OF DEVOURING',
+  OF_BINDING = 'OF BINDING',
+  OF_REAPING = 'OF REAPING',
+  OF_DETONATION = 'OF DETONATION',
+  OF_ECHOES = 'OF ECHOES',
+}
 
-export type StatusEffectType = 'burn' | 'slow' | 'chain' | 'none';
+export type TargetingType = 'melee' | 'projectile' | 'aoe' | 'line' | 'placement';
 
-// ── Status Effect Config ──────────────────────────────────────────────────
+export type StatusEffectType = 'burn' | 'chill' | 'knockback' | 'shock' | 'gravity' | 'none';
+
+// ── Status Effect Configs ─────────────────────────────────────────────────
 
 export interface BurnConfig {
   type: 'burn';
@@ -49,23 +52,50 @@ export interface BurnConfig {
   duration: number;
 }
 
-export interface SlowConfig {
-  type: 'slow';
-  slowPercent: number;
-  duration: number;
+export interface ChillConfig {
+  type: 'chill';
+  slowPerStack: number;
+  maxStacks: number;
+  stackDuration: number;
+  freezeDuration: number;
+  freezeThreshold: number;
 }
 
-export interface ChainConfig {
-  type: 'chain';
-  maxTargets: number;
-  chainRange: number;
+export interface KnockbackConfig {
+  type: 'knockback';
+  force: number;
+  duration: number;
+  deflectProjectiles: boolean;
+  deflectRadius: number;
+}
+
+export interface ShockConfig {
+  type: 'shock';
+  stunChance: number;
+  stunDuration: number;
+  arcRange: number;
+  arcDamagePercent: number;
+  maxArcTargets: number;
+}
+
+export interface GravityConfig {
+  type: 'gravity';
+  pullRadius: number;
+  pullForce: number;
+  pullDuration: number;
 }
 
 export interface NoEffectConfig {
   type: 'none';
 }
 
-export type StatusEffectConfig = BurnConfig | SlowConfig | ChainConfig | NoEffectConfig;
+export type StatusEffectConfig =
+  | BurnConfig
+  | ChillConfig
+  | KnockbackConfig
+  | ShockConfig
+  | GravityConfig
+  | NoEffectConfig;
 
 // ── Visual Config ─────────────────────────────────────────────────────────
 
@@ -75,13 +105,141 @@ export interface VisualConfig {
   trailColor: number;
 }
 
-// ── Audio Config (placeholder for future) ─────────────────────────────────
+// ── Audio Config ──────────────────────────────────────────────────────────
 
 export interface AudioConfig {
   castSound?: string;
   hitSound?: string;
   loopSound?: string;
 }
+
+// ── Prefix Behaviors ──────────────────────────────────────────────────────
+
+export interface HomingBehavior {
+  type: 'homing';
+  turnRate: number;
+  trackingRange: number;
+}
+
+export interface SplittingBehavior {
+  type: 'splitting';
+  splitCount: number;
+  splitAtPercent: number;
+  splitAngleSpread: number;
+  splitDamagePercent: number;
+}
+
+export interface GreaterBehavior {
+  type: 'greater';
+  sizeMultiplier: number;
+  extraDamageFlat: number;
+}
+
+export interface ExpandingBehavior {
+  type: 'expanding';
+  startScale: number;
+  endScale: number;
+  growthRate: number;
+}
+
+export interface ReturningBehavior {
+  type: 'returning';
+  returnSpeed: number;
+  returnDamagePercent: number;
+}
+
+export interface PiercingBehavior {
+  type: 'piercing';
+  maxPierceTargets: number;
+  damageRetainPercent: number;
+}
+
+export type PrefixBehavior =
+  | HomingBehavior
+  | SplittingBehavior
+  | GreaterBehavior
+  | ExpandingBehavior
+  | ReturningBehavior
+  | PiercingBehavior;
+
+// ── Suffix Behaviors ──────────────────────────────────────────────────────
+
+export interface DevouringBehavior {
+  type: 'devouring';
+  manaRestoreOnKill: number;
+}
+
+export interface BindingBehavior {
+  type: 'binding';
+  bindDuration: number;
+  bindRadius: number;
+}
+
+export interface ReapingBehavior {
+  type: 'reaping';
+  seekRange: number;
+  maxAdditionalTargets: number;
+  seekDamagePercent: number;
+}
+
+export interface DetonationBehavior {
+  type: 'detonation';
+  explosionRadius: number;
+  explosionDamagePercent: number;
+  canChainDetonate: boolean;
+}
+
+export interface EchoesBehavior {
+  type: 'echoes';
+  echoDelay: number;
+  echoDamageMultiplier: number;
+  canEchoRecursively: boolean;
+}
+
+export type SuffixBehavior =
+  | DevouringBehavior
+  | BindingBehavior
+  | ReapingBehavior
+  | DetonationBehavior
+  | EchoesBehavior;
+
+// ── Form Visual Configs ───────────────────────────────────────────────────
+
+export interface BladeVisual {
+  arcAngle: number;
+  range: number;
+  swingDuration: number;
+}
+
+export interface BeamVisual {
+  width: number;
+  range: number;
+  castDuration: number;
+  tickInterval: number;
+}
+
+export interface OrbVisual {
+  radius: number;
+  speed: number;
+  lifetime: number;
+  damageTickInterval: number;
+  damageRadius: number;
+}
+
+export interface MineVisual {
+  radius: number;
+  armDelay: number;
+  triggerRadius: number;
+  explosionRadius: number;
+  lifetime: number;
+}
+
+export interface NovaVisual {
+  radius: number;
+  expandDuration: number;
+}
+
+export type FormVisualConfig = BladeVisual | BeamVisual | OrbVisual | MineVisual | NovaVisual;
 
 // ── Component Interfaces ──────────────────────────────────────────────────
 
@@ -104,10 +262,7 @@ export interface FormComponent {
   cooldown: number;
   targetingType: TargetingType;
   damageMultiplier: number;
-  visual: {
-    scale: number;
-    duration: number;
-  };
+  formVisual: FormVisualConfig;
   audio: AudioConfig;
   compatiblePrefixes: PrefixId[] | 'all';
   compatibleSuffixes: SuffixId[] | 'all';
@@ -139,218 +294,317 @@ export interface SuffixComponent {
   audio: AudioConfig;
 }
 
-// ── Behavior Configs ──────────────────────────────────────────────────────
-
-export interface GreaterBehavior {
-  type: 'greater';
-  sizeMultiplier: number;
-  extraDamageFlat: number;
-}
-
-export interface SwiftBehavior {
-  type: 'swift';
-  speedMultiplier: number;
-  cooldownReduction: number;
-}
-
-export type PrefixBehavior = GreaterBehavior | SwiftBehavior;
-
-export interface SeekingBehavior {
-  type: 'seeking';
-  turnRate: number;
-  trackingRange: number;
-}
-
-export interface PiercingBehavior {
-  type: 'piercing';
-  maxPierceTargets: number;
-  damageRetainPercent: number;
-}
-
-export type SuffixBehavior = SeekingBehavior | PiercingBehavior;
-
 // ═══════════════════════════════════════════════════════════════════════════
 //  REGISTRIES
 // ═══════════════════════════════════════════════════════════════════════════
-
-// ── CORES ─────────────────────────────────────────────────────────────────
 
 export const CORE_REGISTRY: Record<CoreId, CoreComponent> = {
   [CoreId.FIRE]: {
     id: CoreId.FIRE,
     displayName: 'Fire',
     description: 'Burns enemies over time.',
-    manaCost: 4,
+    manaCost: 5,
     baseDamage: 25,
     statusEffect: {
       type: 'burn',
       damagePerSecond: 5,
       duration: 3,
     },
-    visual: {
-      color: 0xff6600,
-      glowColor: 0xff9944,
-      trailColor: 0xff3300,
-    },
+    visual: { color: 0xff6600, glowColor: 0xff9944, trailColor: 0xff3300 },
     audio: {},
   },
-
   [CoreId.ICE]: {
     id: CoreId.ICE,
     displayName: 'Ice',
-    description: 'Slows enemies by 40%.',
-    manaCost: 3,
+    description: 'Stacking Chill. Max stacks = Freeze.',
+    manaCost: 5,
     baseDamage: 20,
     statusEffect: {
-      type: 'slow',
-      slowPercent: 0.4,
-      duration: 2,
+      type: 'chill',
+      slowPerStack: 0.1,
+      maxStacks: 4,
+      stackDuration: 4,
+      freezeDuration: 2,
+      freezeThreshold: 4,
     },
-    visual: {
-      color: 0x44ccff,
-      glowColor: 0x88ddff,
-      trailColor: 0x2299cc,
-    },
+    visual: { color: 0x44ccff, glowColor: 0x88ddff, trailColor: 0x2299cc },
     audio: {},
   },
-
-  [CoreId.LIGHTNING]: {
-    id: CoreId.LIGHTNING,
-    displayName: 'Lightning',
-    description: 'Chains between enemies.',
+  [CoreId.WIND]: {
+    id: CoreId.WIND,
+    displayName: 'Wind',
+    description: 'Pushes enemies back.',
     manaCost: 5,
+    baseDamage: 18,
+    statusEffect: {
+      type: 'knockback',
+      force: 300,
+      duration: 0.3,
+      deflectProjectiles: true,
+      deflectRadius: 80,
+    },
+    visual: { color: 0x88ffbb, glowColor: 0xbbffdd, trailColor: 0x55cc88 },
+    audio: {},
+  },
+  [CoreId.STORM]: {
+    id: CoreId.STORM,
+    displayName: 'Storm',
+    description: 'Chance to stun + arc to nearby.',
+    manaCost: 6,
     baseDamage: 22,
     statusEffect: {
-      type: 'chain',
-      maxTargets: 3,
-      chainRange: 150,
+      type: 'shock',
+      stunChance: 0.25,
+      stunDuration: 0.5,
+      arcRange: 120,
+      arcDamagePercent: 0.3,
+      maxArcTargets: 2,
     },
-    visual: {
-      color: 0xffff00,
-      glowColor: 0xffffaa,
-      trailColor: 0xcccc00,
+    visual: { color: 0xaa88ff, glowColor: 0xccaaff, trailColor: 0x8866dd },
+    audio: {},
+  },
+  [CoreId.COSMIC]: {
+    id: CoreId.COSMIC,
+    displayName: 'Cosmic',
+    description: 'Gravity pulls enemies inward.',
+    manaCost: 7,
+    baseDamage: 20,
+    statusEffect: {
+      type: 'gravity',
+      pullRadius: 120,
+      pullForce: 150,
+      pullDuration: 1.5,
     },
+    visual: { color: 0xdd66ff, glowColor: 0xee99ff, trailColor: 0xbb44dd },
     audio: {},
   },
 };
 
-// ── FORMS ─────────────────────────────────────────────────────────────────
-
 export const FORM_REGISTRY: Record<FormId, FormComponent> = {
-  [FormId.BOLT]: {
-    id: FormId.BOLT,
-    displayName: 'Bolt',
-    description: 'Projectile toward target.',
-    manaCost: 4,
-    cooldown: 400,
+  [FormId.BLADE]: {
+    id: FormId.BLADE,
+    displayName: 'Blade',
+    description: 'Wide close-range melee slash.',
+    manaCost: 5,
+    cooldown: 350,
+    targetingType: 'melee',
+    damageMultiplier: 1.0,
+    formVisual: {
+      arcAngle: 90,
+      range: 70,
+      swingDuration: 200,
+    } as BladeVisual,
+    audio: {},
+    compatiblePrefixes: [PrefixId.GREATER],
+    compatibleSuffixes: 'all',
+  },
+  [FormId.BEAM]: {
+    id: FormId.BEAM,
+    displayName: 'Beam',
+    description: 'Continuous line attack.',
+    manaCost: 8,
+    cooldown: 1000,
+    targetingType: 'line',
+    damageMultiplier: 1.0,
+    formVisual: {
+      width: 14,
+      range: 500,
+      castDuration: 800,
+      tickInterval: 200,
+    } as BeamVisual,
+    audio: {},
+    compatiblePrefixes: [PrefixId.GREATER],
+    compatibleSuffixes: 'all',
+  },
+  [FormId.ORB]: {
+    id: FormId.ORB,
+    displayName: 'Orb',
+    description: 'Slow-moving damaging sphere.',
+    manaCost: 7,
+    cooldown: 550,
     targetingType: 'projectile',
     damageMultiplier: 1.0,
-    visual: { scale: 1, duration: 2000 },
+    formVisual: {
+      radius: 12,
+      speed: 180,
+      lifetime: 2500,
+      damageTickInterval: 300,
+      damageRadius: 30,
+    } as OrbVisual,
     audio: {},
     compatiblePrefixes: 'all',
     compatibleSuffixes: 'all',
   },
-
+  [FormId.MINE]: {
+    id: FormId.MINE,
+    displayName: 'Mine',
+    description: 'Trap that detonates near enemies.',
+    manaCost: 7,
+    cooldown: 700,
+    targetingType: 'placement',
+    damageMultiplier: 1.2,
+    formVisual: {
+      radius: 10,
+      armDelay: 500,
+      triggerRadius: 50,
+      explosionRadius: 80,
+      lifetime: 8000,
+    } as MineVisual,
+    audio: {},
+    compatiblePrefixes: [PrefixId.GREATER],
+    compatibleSuffixes: 'all',
+  },
   [FormId.NOVA]: {
     id: FormId.NOVA,
     displayName: 'Nova',
-    description: 'AoE burst around target.',
-    manaCost: 10,
-    cooldown: 600,
+    description: 'Radial AoE explosion.',
+    manaCost: 9,
+    cooldown: 750,
     targetingType: 'aoe',
     damageMultiplier: 0.9,
-    visual: { scale: 1, duration: 400 },
+    formVisual: {
+      radius: 110,
+      expandDuration: 350,
+    } as NovaVisual,
     audio: {},
-    compatiblePrefixes: 'all',
-    compatibleSuffixes: [SuffixId.PIERCING],
-  },
-
-  [FormId.BEAM]: {
-    id: FormId.BEAM,
-    displayName: 'Beam',
-    description: 'Instant line attack.',
-    manaCost: 7,
-    cooldown: 500,
-    targetingType: 'line',
-    damageMultiplier: 1.0,
-    visual: { scale: 1, duration: 300 },
-    audio: {},
-    compatiblePrefixes: 'all',
-    compatibleSuffixes: [SuffixId.PIERCING],
+    compatiblePrefixes: [PrefixId.GREATER],
+    compatibleSuffixes: 'all',
   },
 };
 
-// ── PREFIXES ──────────────────────────────────────────────────────────────
-
 export const PREFIX_REGISTRY: Record<PrefixId, PrefixComponent> = {
+  [PrefixId.HOMING]: {
+    id: PrefixId.HOMING,
+    displayName: 'Homing',
+    description: 'Tracks nearby enemies.',
+    manaCost: 5,
+    damageMultiplier: 1.0,
+    cooldownMultiplier: 1.0,
+    compatibleForms: [FormId.ORB],
+    behavior: { type: 'homing', turnRate: 2.5, trackingRange: 200 },
+    visual: {},
+    audio: {},
+  },
+  [PrefixId.SPLITTING]: {
+    id: PrefixId.SPLITTING,
+    displayName: 'Splitting',
+    description: 'Splits into 3 mid-flight.',
+    manaCost: 7,
+    damageMultiplier: 0.7,
+    cooldownMultiplier: 1.2,
+    compatibleForms: [FormId.ORB],
+    behavior: { type: 'splitting', splitCount: 3, splitAtPercent: 0.5, splitAngleSpread: 30, splitDamagePercent: 0.6 },
+    visual: {},
+    audio: {},
+  },
   [PrefixId.GREATER]: {
     id: PrefixId.GREATER,
     displayName: 'Greater',
-    description: 'Bigger and more powerful.',
-    manaCost: 5,
-    damageMultiplier: 1.4,
-    cooldownMultiplier: 1.3,
+    description: 'Increases size & AoE by 50%.',
+    manaCost: 4,
+    damageMultiplier: 1.3,
+    cooldownMultiplier: 1.2,
     compatibleForms: 'all',
-    behavior: {
-      type: 'greater',
-      sizeMultiplier: 1.5,
-      extraDamageFlat: 5,
-    },
+    behavior: { type: 'greater', sizeMultiplier: 1.5, extraDamageFlat: 5 },
     visual: {},
     audio: {},
   },
-
-  [PrefixId.SWIFT]: {
-    id: PrefixId.SWIFT,
-    displayName: 'Swift',
-    description: 'Faster with shorter cooldown.',
-    manaCost: 3,
+  [PrefixId.EXPANDING]: {
+    id: PrefixId.EXPANDING,
+    displayName: 'Expanding',
+    description: 'Grows as it travels.',
+    manaCost: 4,
+    damageMultiplier: 1.0,
+    cooldownMultiplier: 1.1,
+    compatibleForms: [FormId.ORB],
+    behavior: { type: 'expanding', startScale: 0.6, endScale: 2.0, growthRate: 0.8 },
+    visual: {},
+    audio: {},
+  },
+  [PrefixId.RETURNING]: {
+    id: PrefixId.RETURNING,
+    displayName: 'Returning',
+    description: 'Returns to caster after travel.',
+    manaCost: 6,
     damageMultiplier: 0.9,
-    cooldownMultiplier: 0.6,
-    compatibleForms: 'all',
-    behavior: {
-      type: 'swift',
-      speedMultiplier: 1.6,
-      cooldownReduction: 0.4,
-    },
+    cooldownMultiplier: 1.3,
+    compatibleForms: [FormId.ORB],
+    behavior: { type: 'returning', returnSpeed: 250, returnDamagePercent: 0.5 },
+    visual: {},
+    audio: {},
+  },
+  [PrefixId.PIERCING]: {
+    id: PrefixId.PIERCING,
+    displayName: 'Piercing',
+    description: 'Passes through enemies.',
+    manaCost: 3,
+    damageMultiplier: 0.85,
+    cooldownMultiplier: 1.0,
+    compatibleForms: [FormId.ORB],
+    behavior: { type: 'piercing', maxPierceTargets: 3, damageRetainPercent: 0.7 },
     visual: {},
     audio: {},
   },
 };
 
-// ── SUFFIXES ──────────────────────────────────────────────────────────────
-
 export const SUFFIX_REGISTRY: Record<SuffixId, SuffixComponent> = {
-  [SuffixId.SEEKING]: {
-    id: SuffixId.SEEKING,
-    displayName: 'Seeking',
-    description: 'Homes toward nearest enemy.',
-    manaCost: 4,
-    damageMultiplier: 0.85,
-    cooldownMultiplier: 1.1,
-    compatibleForms: [FormId.BOLT],
-    behavior: {
-      type: 'seeking',
-      turnRate: 3,
-      trackingRange: 200,
-    },
+  [SuffixId.OF_DEVOURING]: {
+    id: SuffixId.OF_DEVOURING,
+    displayName: 'of Devouring',
+    description: 'Kills restore mana.',
+    manaCost: 3,
+    damageMultiplier: 1.0,
+    cooldownMultiplier: 1.0,
+    compatibleForms: 'all',
+    behavior: { type: 'devouring', manaRestoreOnKill: 8 },
     visual: {},
     audio: {},
   },
-
-  [SuffixId.PIERCING]: {
-    id: SuffixId.PIERCING,
-    displayName: 'Piercing',
-    description: 'Passes through enemies.',
-    manaCost: 3,
-    damageMultiplier: 0.8,
-    cooldownMultiplier: 1.0,
-    compatibleForms: [FormId.BOLT, FormId.BEAM],
-    behavior: {
-      type: 'piercing',
-      maxPierceTargets: 3,
-      damageRetainPercent: 0.7,
-    },
+  [SuffixId.OF_BINDING]: {
+    id: SuffixId.OF_BINDING,
+    displayName: 'of Binding',
+    description: 'Roots enemies in place.',
+    manaCost: 5,
+    damageMultiplier: 1.0,
+    cooldownMultiplier: 1.1,
+    compatibleForms: 'all',
+    behavior: { type: 'binding', bindDuration: 1.5, bindRadius: 30 },
+    visual: {},
+    audio: {},
+  },
+  [SuffixId.OF_REAPING]: {
+    id: SuffixId.OF_REAPING,
+    displayName: 'of Reaping',
+    description: 'Kill triggers seek to next enemy.',
+    manaCost: 6,
+    damageMultiplier: 1.0,
+    cooldownMultiplier: 1.15,
+    compatibleForms: 'all',
+    behavior: { type: 'reaping', seekRange: 180, maxAdditionalTargets: 2, seekDamagePercent: 0.6 },
+    visual: {},
+    audio: {},
+  },
+  [SuffixId.OF_DETONATION]: {
+    id: SuffixId.OF_DETONATION,
+    displayName: 'of Detonation',
+    description: 'Killed enemies explode.',
+    manaCost: 6,
+    damageMultiplier: 1.0,
+    cooldownMultiplier: 1.2,
+    compatibleForms: 'all',
+    behavior: { type: 'detonation', explosionRadius: 70, explosionDamagePercent: 0.5, canChainDetonate: false },
+    visual: {},
+    audio: {},
+  },
+  [SuffixId.OF_ECHOES]: {
+    id: SuffixId.OF_ECHOES,
+    displayName: 'of Echoes',
+    description: 'Spell repeats at reduced power.',
+    manaCost: 7,
+    damageMultiplier: 1.0,
+    cooldownMultiplier: 1.3,
+    compatibleForms: 'all',
+    behavior: { type: 'echoes', echoDelay: 600, echoDamageMultiplier: 0.5, canEchoRecursively: false },
     visual: {},
     audio: {},
   },
@@ -360,51 +614,40 @@ export const SUFFIX_REGISTRY: Record<SuffixId, SuffixComponent> = {
 //  LOOKUP FUNCTIONS
 // ═══════════════════════════════════════════════════════════════════════════
 
-export function getCore(id: CoreId): CoreComponent {
-  return CORE_REGISTRY[id];
-}
+export function getCore(id: CoreId): CoreComponent { return CORE_REGISTRY[id]; }
+export function getForm(id: FormId): FormComponent { return FORM_REGISTRY[id]; }
+export function getPrefix(id: PrefixId): PrefixComponent { return PREFIX_REGISTRY[id]; }
+export function getSuffix(id: SuffixId): SuffixComponent { return SUFFIX_REGISTRY[id]; }
 
-export function getForm(id: FormId): FormComponent {
-  return FORM_REGISTRY[id];
-}
-
-export function getPrefix(id: PrefixId): PrefixComponent {
-  return PREFIX_REGISTRY[id];
-}
-
-export function getSuffix(id: SuffixId): SuffixComponent {
-  return SUFFIX_REGISTRY[id];
-}
-
-export function getAllCoreIds(): CoreId[] {
-  return Object.keys(CORE_REGISTRY) as CoreId[];
-}
-
-export function getAllFormIds(): FormId[] {
-  return Object.keys(FORM_REGISTRY) as FormId[];
-}
-
-export function getAllPrefixIds(): PrefixId[] {
-  return Object.keys(PREFIX_REGISTRY) as PrefixId[];
-}
-
-export function getAllSuffixIds(): SuffixId[] {
-  return Object.keys(SUFFIX_REGISTRY) as SuffixId[];
-}
+export function getAllCoreIds(): CoreId[] { return Object.keys(CORE_REGISTRY) as CoreId[]; }
+export function getAllFormIds(): FormId[] { return Object.keys(FORM_REGISTRY) as FormId[]; }
+export function getAllPrefixIds(): PrefixId[] { return Object.keys(PREFIX_REGISTRY) as PrefixId[]; }
+export function getAllSuffixIds(): SuffixId[] { return Object.keys(SUFFIX_REGISTRY) as SuffixId[]; }
 
 /**
- * Check if a word matches any component. Returns { type, id } or null.
+ * Identify a single word as a component type.
+ * Handles multi-word suffix IDs like "OF DEVOURING" via
+ * the two-word lookahead in SpellBuilder.parseAndBuild.
  */
 export function identifyWord(word: string): {
   type: 'core' | 'form' | 'prefix' | 'suffix';
   id: string;
 } | null {
   const upper = word.toUpperCase();
-
   if (upper in CORE_REGISTRY) return { type: 'core', id: upper };
   if (upper in FORM_REGISTRY) return { type: 'form', id: upper };
   if (upper in PREFIX_REGISTRY) return { type: 'prefix', id: upper };
-  if (upper in SUFFIX_REGISTRY) return { type: 'suffix', id: upper };
+  return null;
+}
 
+/**
+ * Try to identify a multi-word suffix like "OF DEVOURING".
+ */
+export function identifySuffix(words: string): {
+  type: 'suffix';
+  id: string;
+} | null {
+  const upper = words.toUpperCase();
+  if (upper in SUFFIX_REGISTRY) return { type: 'suffix', id: upper };
   return null;
 }

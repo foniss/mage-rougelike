@@ -6,8 +6,8 @@ import { Enemy } from '../entities/Enemy';
 import { Projectile } from '../entities/Projectile';
 import { SpellCaster, CastContext } from './SpellCaster';
 import { StatusEffectSystem } from './StatusEffectSystem';
-import { LightningChainSystem } from './LightningChainSystem';
-import { ENEMY_DAMAGE } from '../config/constants';
+import { ENEMY_DAMAGE, ENEMY_RADIUS } from '../config/constants';
+import { OrbVisual } from '../config/spellComponents';
 
 export class CombatSystem {
   private scene: Phaser.Scene;
@@ -15,7 +15,6 @@ export class CombatSystem {
   private enemies: Enemy[];
   private projectiles: Projectile[];
   private statusEffects: StatusEffectSystem;
-  private lightningChain: LightningChainSystem;
 
   constructor(
     scene: Phaser.Scene,
@@ -23,14 +22,12 @@ export class CombatSystem {
     enemies: Enemy[],
     projectiles: Projectile[],
     statusEffects: StatusEffectSystem,
-    lightningChain: LightningChainSystem
   ) {
-    this.scene          = scene;
-    this.player         = player;
-    this.enemies        = enemies;
-    this.projectiles    = projectiles;
-    this.statusEffects  = statusEffects;
-    this.lightningChain = lightningChain;
+    this.scene = scene;
+    this.player = player;
+    this.enemies = enemies;
+    this.projectiles = projectiles;
+    this.statusEffects = statusEffects;
   }
 
   update(): void {
@@ -43,6 +40,43 @@ export class CombatSystem {
       const proj = this.projectiles[i];
       if (!proj.active) continue;
 
+      // Orb aura damage
+      if (proj.spell?.form.id === 'ORB') {
+        const ov = proj.spell.form.formVisual as OrbVisual;
+        for (const enemy of this.enemies) {
+          if (!enemy.alive) continue;
+          const dist = Phaser.Math.Distance.Between(
+            proj.sprite.x, proj.sprite.y,
+            enemy.sprite.x, enemy.sprite.y
+          );
+          if (dist <= ov.damageRadius) {
+            // Check tick timing via data
+            const lastTick = proj.sprite.getData('lastAuraTick') || 0;
+            const now = this.scene.time.now;
+            if (now - lastTick >= ov.damageTickInterval) {
+              proj.sprite.setData('lastAuraTick', now);
+              const auraDamage = Math.round(proj.damage * 0.2);
+              enemy.takeDamage(auraDamage);
+
+              if (proj.spell) {
+                const ctx: CastContext = {
+                  scene: this.scene,
+                  spell: proj.spell,
+                  player: this.player,
+                  targetX: enemy.sprite.x,
+                  targetY: enemy.sprite.y,
+                  enemies: this.enemies,
+                  projectiles: this.projectiles,
+                  statusEffects: this.statusEffects,
+                };
+                SpellCaster.applyOnHit(ctx, enemy);
+              }
+            }
+          }
+        }
+      }
+
+      // Direct collision
       for (const enemy of this.enemies) {
         if (!enemy.alive) continue;
 
@@ -51,27 +85,40 @@ export class CombatSystem {
           enemy.sprite.x, enemy.sprite.y
         );
 
-        if (dist < 24) {
+        const hitRadius = proj.spell?.form.id === 'ORB' ? 20 : 24;
+
+        if (dist < hitRadius) {
+          // Skip if this enemy was already hit by this piercing projectile
+          const enemyId = enemy.sprite.x + ',' + enemy.sprite.y + ',' + enemy.hp;
+          if (proj.maxPierceTargets > 0 && proj.hitEnemies.has(enemyId)) continue;
+
           enemy.takeDamage(proj.damage);
 
-          // Apply core effect if this is a spell projectile
-          if (proj.spell && proj.spell.targetingType === 'projectile') {
+          if (proj.spell) {
             const ctx: CastContext = {
               scene: this.scene,
               spell: proj.spell,
-              playerX: this.player.sprite.x,
-              playerY: this.player.sprite.y,
+              player: this.player,
               targetX: enemy.sprite.x,
               targetY: enemy.sprite.y,
               enemies: this.enemies,
               projectiles: this.projectiles,
               statusEffects: this.statusEffects,
-              lightningChain: this.lightningChain,
             };
-            SpellCaster.applyCoreEffect(ctx, enemy);
+            SpellCaster.applyOnHit(ctx, enemy);
           }
 
-          proj.destroy();
+          // Handle piercing
+          if (proj.maxPierceTargets > 0) {
+            proj.hitEnemies.add(enemyId);
+            proj.pierceCount++;
+            proj.damage = Math.round(proj.damage * proj.damageRetainPercent);
+            if (proj.pierceCount >= proj.maxPierceTargets) {
+              proj.destroy();
+            }
+          } else {
+            proj.destroy();
+          }
           break;
         }
       }
@@ -80,17 +127,13 @@ export class CombatSystem {
 
   private checkEnemyPlayerCollisions(): void {
     if (!this.player.alive) return;
-
     const now = this.scene.time.now;
-
     for (const enemy of this.enemies) {
       if (!enemy.alive) continue;
-
       const dist = Phaser.Math.Distance.Between(
         this.player.sprite.x, this.player.sprite.y,
-        enemy.sprite.x,       enemy.sprite.y
+        enemy.sprite.x, enemy.sprite.y
       );
-
       if (dist < 30 && enemy.canDealContactDamage(now)) {
         this.player.takeDamage(ENEMY_DAMAGE);
         enemy.lastContactDamageTime = now;

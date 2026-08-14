@@ -13,7 +13,7 @@ export const PLAYER_RADIUS = 14;
 export const MANA_REGEN_RATE = 8;
 export const MANA_REGEN_INTERVAL = 100;
 
-// --- Basic Attack (default, no spell prepared) ---
+// --- Basic Attack ---
 export const BASIC_ATTACK_DAMAGE = 20;
 export const BASIC_ATTACK_MANA_COST = 5;
 export const BASIC_ATTACK_COOLDOWN = 300;
@@ -21,11 +21,11 @@ export const PROJECTILE_SPEED = 500;
 export const PROJECTILE_RADIUS = 5;
 export const PROJECTILE_LIFETIME = 2000;
 
-// --- Spell Forms ---
-export const NOVA_RADIUS = 100;
-export const BEAM_WIDTH = 12;
+// --- Spell Forms (defaults used as fallbacks) ---
+export const NOVA_RADIUS = 110;
+export const BEAM_WIDTH = 14;
 export const BEAM_RANGE = 500;
-export const SPELL_CAST_COOLDOWN = 500;
+export const SPELL_CAST_COOLDOWN = 300;
 
 // --- Status Effect Visuals ---
 export const BURN_TICK_INTERVAL = 500;
@@ -53,13 +53,17 @@ export const CHAIN_DELAY_BETWEEN = 120;
 export const CHAIN_HIT_FLASH_COLOR = 0xffff88;
 export const CHAIN_HIT_FLASH_RADIUS = 14;
 
+// --- Chill ---
+export const CHILL_TINT = 0x88bbff;
+export const FREEZE_TINT = 0x4466cc;
+
 // --- Enemy ---
 export const ENEMY_MAX_HP = 100;
 export const ENEMY_SPEED = 80;
 export const ENEMY_DAMAGE = 10;
 export const ENEMY_RADIUS = 16;
 export const ENEMY_ATTACK_COOLDOWN = 1000;
-export const ENEMY_COUNT = 3;
+export const ENEMY_COUNT = 4;
 
 // --- Grimoire ---
 export const GRIMOIRE_SLOW_FACTOR = 0.2;

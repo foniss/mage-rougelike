@@ -2,254 +2,232 @@
 
 import Phaser from 'phaser';
 import { Spell } from './SpellBuilder';
-import { BurnConfig, SlowConfig, ChainConfig } from '../config/spellComponents';
 import { Enemy } from '../entities/Enemy';
+import { Player } from '../entities/Player';
 import { Projectile } from '../entities/Projectile';
 import { StatusEffectSystem } from './StatusEffectSystem';
-import { LightningChainSystem } from './LightningChainSystem';
+import { FormExecutor, FormContext } from './FormExecutor';
+import { CoreEffectExecutor, EffectContext } from './CoreEffectExecutor';
 import {
-  NOVA_RADIUS,
-  BEAM_WIDTH,
-  BEAM_RANGE,
-} from '../config/constants';
+  EchoesBehavior,
+  DevouringBehavior,
+  BindingBehavior,
+  ReapingBehavior,
+  DetonationBehavior,
+} from '../config/spellComponents';
+import { ENEMY_RADIUS } from '../config/constants';
 
 export interface CastContext {
   scene: Phaser.Scene;
   spell: Spell;
-  playerX: number;
-  playerY: number;
+  player: Player;
   targetX: number;
   targetY: number;
   enemies: Enemy[];
   projectiles: Projectile[];
   statusEffects: StatusEffectSystem;
-  lightningChain: LightningChainSystem;
 }
 
 export class SpellCaster {
 
   static cast(ctx: CastContext): void {
-    switch (ctx.spell.targetingType) {
-      case 'projectile':
-        SpellCaster.castBolt(ctx);
-        break;
-      case 'aoe':
-        SpellCaster.castNova(ctx);
-        break;
-      case 'line':
-        SpellCaster.castBeam(ctx);
-        break;
-    }
-  }
+    const { scene, spell, player, enemies, projectiles, statusEffects } = ctx;
 
-  // ── BOLT ────────────────────────────────────────────────────────────────
+    const formCtx: FormContext = {
+      scene, spell, player,
+      targetX: ctx.targetX, targetY: ctx.targetY,
+      enemies, projectiles, statusEffects,
+    };
 
-  private static castBolt(ctx: CastContext): void {
-    const angle = Phaser.Math.Angle.Between(
-      ctx.playerX, ctx.playerY,
-      ctx.targetX, ctx.targetY
-    );
+    // Execute the form
+    FormExecutor.execute(formCtx);
 
-    const spawnDist = 24;
-    const spawnX = ctx.playerX + Math.cos(angle) * spawnDist;
-    const spawnY = ctx.playerY + Math.sin(angle) * spawnDist;
-
-    const projectile = new Projectile(ctx.scene, {
-      x: spawnX,
-      y: spawnY,
-      angle,
-      spell: ctx.spell,
-    });
-    ctx.projectiles.push(projectile);
-  }
-
-  // ── NOVA ────────────────────────────────────────────────────────────────
-
-  private static castNova(ctx: CastContext): void {
-    const { scene, spell, targetX, targetY, enemies } = ctx;
-
-    let novaRadius = NOVA_RADIUS;
-    if (spell.prefix?.behavior.type === 'greater') {
-      novaRadius *= spell.prefix.behavior.sizeMultiplier;
+    // Handle suffix on-kill effects by watching for kills
+    if (spell.suffix) {
+      SpellCaster.setupSuffixWatchers(ctx);
     }
 
-    const ring = scene.add.circle(targetX, targetY, 10, spell.visual.color, 0.4);
-    ring.setDepth(20);
-    ring.setStrokeStyle(2, spell.visual.color, 0.8);
+    // Handle echo suffix
+    if (spell.suffix?.behavior.type === 'echoes' && !spell.isEcho) {
+      const echoBehavior = spell.suffix.behavior as EchoesBehavior;
+      scene.time.delayedCall(echoBehavior.echoDelay, () => {
+        // Create echo spell with reduced damage
+        const echoSpell: Spell = {
+          ...spell,
+          damage: Math.round(spell.damage * echoBehavior.echoDamageMultiplier),
+          isEcho: true,
+          suffix: echoBehavior.canEchoRecursively ? spell.suffix : null,
+        };
 
-    scene.tweens.add({
-      targets: ring,
-      scaleX: novaRadius / 10,
-      scaleY: novaRadius / 10,
-      alpha: 0,
-      duration: spell.form.visual.duration,
-      ease: 'Power2',
-      onComplete: () => ring.destroy(),
-    });
-
-    const flash = scene.add.circle(targetX, targetY, novaRadius * 0.3, spell.visual.glowColor, 0.5);
-    flash.setDepth(19);
-    scene.tweens.add({
-      targets: flash,
-      alpha: 0,
-      scaleX: 3,
-      scaleY: 3,
-      duration: 300,
-      onComplete: () => flash.destroy(),
-    });
-
-    const hitEnemies: Enemy[] = [];
-    for (const enemy of enemies) {
-      if (!enemy.alive) continue;
-      const dist = Phaser.Math.Distance.Between(
-        targetX, targetY,
-        enemy.sprite.x, enemy.sprite.y
-      );
-      if (dist <= novaRadius) {
-        enemy.takeDamage(spell.damage);
-        hitEnemies.push(enemy);
-      }
+        const echoCtx: CastContext = { ...ctx, spell: echoSpell };
+        SpellCaster.cast(echoCtx);
+      });
     }
 
-    for (const enemy of hitEnemies) {
-      SpellCaster.applyCoreEffect(ctx, enemy);
-    }
-  }
-
-  // ── BEAM ────────────────────────────────────────────────────────────────
-
-  private static castBeam(ctx: CastContext): void {
-    const { scene, spell, playerX, playerY, targetX, targetY, enemies } = ctx;
-
-    const angle = Phaser.Math.Angle.Between(playerX, playerY, targetX, targetY);
-    const endX = playerX + Math.cos(angle) * BEAM_RANGE;
-    const endY = playerY + Math.sin(angle) * BEAM_RANGE;
-
-    let beamWidth = BEAM_WIDTH;
-    if (spell.prefix?.behavior.type === 'greater') {
-      beamWidth *= spell.prefix.behavior.sizeMultiplier;
-    }
-
-    const beamLine = scene.add.line(
-      0, 0, playerX, playerY, endX, endY, spell.visual.color, 0.8
-    );
-    beamLine.setOrigin(0, 0);
-    beamLine.setLineWidth(beamWidth / 2);
-    beamLine.setDepth(20);
-
-    const beamInner = scene.add.line(
-      0, 0, playerX, playerY, endX, endY, spell.visual.glowColor, 0.6
-    );
-    beamInner.setOrigin(0, 0);
-    beamInner.setLineWidth(beamWidth / 4);
-    beamInner.setDepth(21);
-
-    scene.tweens.add({
-      targets: [beamLine, beamInner],
-      alpha: 0,
-      duration: spell.form.visual.duration,
-      ease: 'Power2',
-      onComplete: () => {
-        beamLine.destroy();
-        beamInner.destroy();
-      },
-    });
-
-    const hitEnemies: Enemy[] = [];
-    for (const enemy of enemies) {
-      if (!enemy.alive) continue;
-
-      const dist = SpellCaster.pointToLineDistance(
-        enemy.sprite.x, enemy.sprite.y,
-        playerX, playerY, endX, endY
-      );
-
-      if (dist <= beamWidth + 16) {
-        const t = SpellCaster.dotAlongLine(
-          enemy.sprite.x, enemy.sprite.y,
-          playerX, playerY, endX, endY
+    // Handle binding suffix
+    if (spell.suffix?.behavior.type === 'binding') {
+      const bindBehavior = spell.suffix.behavior as BindingBehavior;
+      // Apply binding to enemies near the target
+      for (const enemy of enemies) {
+        if (!enemy.alive) continue;
+        const dist = Phaser.Math.Distance.Between(
+          ctx.targetX, ctx.targetY,
+          enemy.sprite.x, enemy.sprite.y
         );
-        if (t >= 0 && t <= 1) {
-          enemy.takeDamage(spell.damage);
-          hitEnemies.push(enemy);
+        if (dist <= bindBehavior.bindRadius + ENEMY_RADIUS + 20) {
+          enemy.isBound = true;
+          enemy.bindAnchorX = enemy.sprite.x;
+          enemy.bindAnchorY = enemy.sprite.y;
+          enemy.bindRadius = bindBehavior.bindRadius;
 
-          const hitFlash = scene.add.circle(
+          // Visual: binding circle
+          const bindCircle = scene.add.circle(
             enemy.sprite.x, enemy.sprite.y,
-            12, spell.visual.color, 0.6
-          );
-          hitFlash.setDepth(22);
-          scene.tweens.add({
-            targets: hitFlash,
-            alpha: 0,
-            scaleX: 2,
-            scaleY: 2,
-            duration: 200,
-            onComplete: () => hitFlash.destroy(),
+            bindBehavior.bindRadius, spell.visual.color, 0.1
+          ).setDepth(6).setStrokeStyle(1, spell.visual.color, 0.3);
+
+          const updateBind = scene.time.addEvent({
+            delay: 16, loop: true,
+            callback: () => {
+              if (enemy.alive) bindCircle.setPosition(enemy.bindAnchorX, enemy.bindAnchorY);
+            },
+          });
+
+          scene.time.delayedCall(bindBehavior.bindDuration * 1000, () => {
+            enemy.isBound = false;
+            updateBind.destroy();
+            scene.tweens.add({
+              targets: bindCircle, alpha: 0, duration: 200,
+              onComplete: () => bindCircle.destroy(),
+            });
           });
         }
       }
     }
-
-    for (const enemy of hitEnemies) {
-      SpellCaster.applyCoreEffect(ctx, enemy);
-    }
   }
 
-  // ── Core Effect ─────────────────────────────────────────────────────────
+  /**
+   * Set up watchers for suffix on-kill effects.
+   * Listens for enemy-died events that happen shortly after casting.
+   */
+  private static setupSuffixWatchers(ctx: CastContext): void {
+    const { scene, spell, enemies, statusEffects } = ctx;
+    if (!spell.suffix) return;
 
-  static applyCoreEffect(ctx: CastContext, enemy: Enemy): void {
-    if (!enemy.alive) return;
+    const behavior = spell.suffix.behavior;
+    const watchDuration = 3000; // How long after cast to watch for kills
 
-    const effect = ctx.spell.statusEffect;
+    const onEnemyDied = (enemy: Enemy) => {
+      if (behavior.type === 'devouring') {
+        const devBehavior = behavior as DevouringBehavior;
+        if (ctx.player.alive) {
+          ctx.player.mana = Math.min(
+            ctx.player.maxMana,
+            ctx.player.mana + devBehavior.manaRestoreOnKill
+          );
+          // Visual feedback
+          const manaText = scene.add.text(
+            ctx.player.sprite.x, ctx.player.sprite.y - 30,
+            `+${devBehavior.manaRestoreOnKill} MP`,
+            { fontFamily: '"Courier New", monospace', fontSize: '12px', color: '#4488ff', fontStyle: 'bold' }
+          ).setOrigin(0.5).setDepth(50);
+          scene.tweens.add({
+            targets: manaText, y: manaText.y - 20, alpha: 0, duration: 800,
+            onComplete: () => manaText.destroy(),
+          });
+        }
+      }
 
-    switch (effect.type) {
-      case 'burn': {
-        const burn = effect as BurnConfig;
-        ctx.statusEffects.applyBurn(enemy, burn.damagePerSecond, burn.duration);
-        break;
+      if (behavior.type === 'reaping') {
+        const reapBehavior = behavior as ReapingBehavior;
+        let targetsLeft = reapBehavior.maxAdditionalTargets;
+
+        const seekNext = (fromX: number, fromY: number) => {
+          if (targetsLeft <= 0) return;
+          let closest: Enemy | null = null;
+          let closestDist = Infinity;
+          for (const e of enemies) {
+            if (!e.alive) continue;
+            const d = Phaser.Math.Distance.Between(fromX, fromY, e.sprite.x, e.sprite.y);
+            if (d <= reapBehavior.seekRange && d < closestDist) {
+              closestDist = d;
+              closest = e;
+            }
+          }
+          if (closest) {
+            targetsLeft--;
+            const seekDmg = Math.round(spell.damage * reapBehavior.seekDamagePercent);
+            closest.takeDamage(seekDmg);
+
+            // Seek visual
+            const seekLine = scene.add.line(0, 0,
+              fromX, fromY, closest.sprite.x, closest.sprite.y,
+              spell.visual.color, 0.5
+            ).setOrigin(0, 0).setLineWidth(1).setDepth(20);
+            scene.tweens.add({
+              targets: seekLine, alpha: 0, duration: 300,
+              onComplete: () => seekLine.destroy(),
+            });
+
+            // Apply core effect
+            const eCtx: EffectContext = {
+              scene, spell, sourceX: fromX, sourceY: fromY,
+              enemies, statusEffects,
+            };
+            CoreEffectExecutor.apply(eCtx, closest);
+          }
+        };
+
+        seekNext(enemy.sprite.x, enemy.sprite.y);
       }
-      case 'slow': {
-        const slow = effect as SlowConfig;
-        ctx.statusEffects.applySlow(enemy, slow.slowPercent, slow.duration);
-        break;
+
+      if (behavior.type === 'detonation') {
+        const detBehavior = behavior as DetonationBehavior;
+        const ex = enemy.sprite.x, ey = enemy.sprite.y;
+
+        // Explosion visual
+        const explosion = scene.add.circle(ex, ey, 10, spell.visual.color, 0.4);
+        explosion.setDepth(20).setStrokeStyle(2, spell.visual.glowColor, 0.7);
+        scene.tweens.add({
+          targets: explosion,
+          scaleX: detBehavior.explosionRadius / 10,
+          scaleY: detBehavior.explosionRadius / 10,
+          alpha: 0, duration: 300, ease: 'Power2',
+          onComplete: () => explosion.destroy(),
+        });
+
+        const detDmg = Math.round(spell.damage * detBehavior.explosionDamagePercent);
+        for (const e of enemies) {
+          if (!e.alive) continue;
+          const d = Phaser.Math.Distance.Between(ex, ey, e.sprite.x, e.sprite.y);
+          if (d <= detBehavior.explosionRadius) {
+            e.takeDamage(detDmg);
+            // DO NOT chain detonate (canChainDetonate is false)
+          }
+        }
       }
-      case 'chain': {
-        const chain = effect as ChainConfig;
-        ctx.lightningChain.executeChain(
-          enemy, ctx.enemies, chain.maxTargets, chain.chainRange, ctx.spell.damage
-        );
-        break;
-      }
-      case 'none':
-        break;
-    }
+    };
+
+    scene.events.on('enemy-died', onEnemyDied);
+
+    // Stop watching after watchDuration
+    scene.time.delayedCall(watchDuration, () => {
+      scene.events.off('enemy-died', onEnemyDied);
+    });
   }
 
-  // ── Geometry ────────────────────────────────────────────────────────────
-
-  private static pointToLineDistance(
-    px: number, py: number,
-    x1: number, y1: number,
-    x2: number, y2: number
-  ): number {
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const lenSq = dx * dx + dy * dy;
-    if (lenSq === 0) return Phaser.Math.Distance.Between(px, py, x1, y1);
-    let t = ((px - x1) * dx + (py - y1) * dy) / lenSq;
-    t = Math.max(0, Math.min(1, t));
-    return Phaser.Math.Distance.Between(px, py, x1 + t * dx, y1 + t * dy);
-  }
-
-  private static dotAlongLine(
-    px: number, py: number,
-    x1: number, y1: number,
-    x2: number, y2: number
-  ): number {
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-    const lenSq = dx * dx + dy * dy;
-    if (lenSq === 0) return 0;
-    return ((px - x1) * dx + (py - y1) * dy) / lenSq;
+  /**
+   * Called by CombatSystem when a spell projectile hits an enemy.
+   */
+  static applyOnHit(ctx: CastContext, enemy: Enemy): void {
+    const eCtx: EffectContext = {
+      scene: ctx.scene,
+      spell: ctx.spell,
+      sourceX: ctx.player.sprite.x,
+      sourceY: ctx.player.sprite.y,
+      enemies: ctx.enemies,
+      statusEffects: ctx.statusEffects,
+    };
+    CoreEffectExecutor.apply(eCtx, enemy);
   }
 }

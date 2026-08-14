@@ -1,13 +1,4 @@
 // src/systems/SpellBuilder.ts
-//
-// ═══════════════════════════════════════════════════════════════════════════
-//  SPELL BUILDER
-//
-//  1. Receives component IDs (prefix, core, form, suffix).
-//  2. Validates compatibility.
-//  3. Calculates final mana cost, cooldown, damage.
-//  4. Produces a runtime Spell object.
-// ═══════════════════════════════════════════════════════════════════════════
 
 import {
   CoreId,
@@ -26,33 +17,27 @@ import {
   getPrefix,
   getSuffix,
   identifyWord,
+  identifySuffix,
+  SUFFIX_REGISTRY,
 } from '../config/spellComponents';
 
 // ── Runtime Spell Object ──────────────────────────────────────────────────
 
 export interface Spell {
-  // Display
   name: string;
   displayName: string;
-
-  // Component references (not copies)
   core: CoreComponent;
   form: FormComponent;
   prefix: PrefixComponent | null;
   suffix: SuffixComponent | null;
-
-  // Computed values
   damage: number;
   manaCost: number;
   cooldown: number;
   statusEffect: StatusEffectConfig;
   targetingType: TargetingType;
-
-  // Computed visuals (core visual with possible overrides)
   visual: VisualConfig;
+  isEcho?: boolean;
 }
-
-// ── Build Result ──────────────────────────────────────────────────────────
 
 export interface BuildResult {
   success: boolean;
@@ -60,195 +45,126 @@ export interface BuildResult {
   error: string;
 }
 
-// ── Parse Result ──────────────────────────────────────────────────────────
+export type ParseResult = BuildResult;
 
-export interface ParseResult {
-  success: boolean;
-  spell: Spell | null;
-  error: string;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-//  BUILDER
 // ═══════════════════════════════════════════════════════════════════════════
 
 export class SpellBuilder {
 
-  /**
-   * Build a spell from explicit component IDs.
-   */
   static build(
     coreId: CoreId,
     formId: FormId,
     prefixId?: PrefixId | null,
     suffixId?: SuffixId | null
   ): BuildResult {
-
     const core = getCore(coreId);
     const form = getForm(formId);
-
-    if (!core) {
-      return { success: false, spell: null, error: `Unknown Core: "${coreId}"` };
-    }
-    if (!form) {
-      return { success: false, spell: null, error: `Unknown Form: "${formId}"` };
-    }
+    if (!core) return { success: false, spell: null, error: `Unknown Core: "${coreId}"` };
+    if (!form) return { success: false, spell: null, error: `Unknown Form: "${formId}"` };
 
     let prefix: PrefixComponent | null = null;
     let suffix: SuffixComponent | null = null;
 
-    // ── Validate Prefix ─────────────────────────────────────────────────
     if (prefixId) {
       prefix = getPrefix(prefixId);
-      if (!prefix) {
-        return { success: false, spell: null, error: `Unknown Prefix: "${prefixId}"` };
+      if (!prefix) return { success: false, spell: null, error: `Unknown Prefix: "${prefixId}"` };
+      if (prefix.compatibleForms !== 'all' && !prefix.compatibleForms.includes(formId)) {
+        return { success: false, spell: null, error: `${prefix.displayName} can't be used with ${form.displayName}.` };
       }
-
-      // Check prefix compatibility with form
-      if (prefix.compatibleForms !== 'all') {
-        if (!prefix.compatibleForms.includes(formId)) {
-          return {
-            success: false,
-            spell: null,
-            error: `${prefix.displayName} cannot be used with ${form.displayName}.`,
-          };
-        }
-      }
-
-      // Check form accepts this prefix
-      if (form.compatiblePrefixes !== 'all') {
-        if (!form.compatiblePrefixes.includes(prefixId)) {
-          return {
-            success: false,
-            spell: null,
-            error: `${form.displayName} does not support prefix ${prefix.displayName}.`,
-          };
-        }
+      if (form.compatiblePrefixes !== 'all' && !form.compatiblePrefixes.includes(prefixId)) {
+        return { success: false, spell: null, error: `${form.displayName} doesn't support ${prefix.displayName}.` };
       }
     }
 
-    // ── Validate Suffix ─────────────────────────────────────────────────
     if (suffixId) {
       suffix = getSuffix(suffixId);
-      if (!suffix) {
-        return { success: false, spell: null, error: `Unknown Suffix: "${suffixId}"` };
+      if (!suffix) return { success: false, spell: null, error: `Unknown Suffix: "${suffixId}"` };
+      if (suffix.compatibleForms !== 'all' && !suffix.compatibleForms.includes(formId)) {
+        return { success: false, spell: null, error: `${suffix.displayName} can't be used with ${form.displayName}.` };
       }
-
-      // Check suffix compatibility with form
-      if (suffix.compatibleForms !== 'all') {
-        if (!suffix.compatibleForms.includes(formId)) {
-          return {
-            success: false,
-            spell: null,
-            error: `${suffix.displayName} cannot be used with ${form.displayName}.`,
-          };
-        }
-      }
-
-      // Check form accepts this suffix
-      if (form.compatibleSuffixes !== 'all') {
-        if (!form.compatibleSuffixes.includes(suffixId)) {
-          return {
-            success: false,
-            spell: null,
-            error: `${form.displayName} does not support suffix ${suffix.displayName}.`,
-          };
-        }
+      if (form.compatibleSuffixes !== 'all' && !form.compatibleSuffixes.includes(suffixId)) {
+        return { success: false, spell: null, error: `${form.displayName} doesn't support ${suffix.displayName}.` };
       }
     }
 
-    // ── Calculate Computed Values ────────────────────────────────────────
-
-    const spell = SpellBuilder.assemble(core, form, prefix, suffix);
-    return { success: true, spell, error: '' };
+    return { success: true, spell: SpellBuilder.assemble(core, form, prefix, suffix), error: '' };
   }
 
-  /**
-   * Parse a raw text input and build a spell.
-   * Accepts formats like:
-   *   "FIRE BOLT"
-   *   "GREATER FIRE BOLT"
-   *   "FIRE BOLT SEEKING"
-   *   "GREATER FIRE BOLT SEEKING"
-   */
   static parseAndBuild(raw: string): ParseResult {
     const cleaned = raw.toUpperCase().trim();
-
-    if (cleaned === '') {
-      return { success: false, spell: null, error: 'Enter a spell name.' };
-    }
+    if (cleaned === '') return { success: false, spell: null, error: 'Enter a spell name.' };
 
     const words = cleaned.split(/\s+/);
+    if (words.length > 6) {
+      return { success: false, spell: null, error: 'Too many words.' };
+    }
 
-    if (words.length < 2 || words.length > 4) {
-      if (words.length === 1) {
-        const identified = identifyWord(words[0]);
-        if (identified) {
-          switch (identified.type) {
-            case 'core':
-              return { success: false, spell: null, error: 'Missing Form. (e.g. BOLT, NOVA, BEAM)' };
-            case 'form':
-              return { success: false, spell: null, error: 'Missing Core. (e.g. FIRE, ICE, LIGHTNING)' };
-            case 'prefix':
-              return { success: false, spell: null, error: 'Missing Core and Form.' };
-            case 'suffix':
-              return { success: false, spell: null, error: 'Missing Core and Form.' };
-          }
-        }
-        return { success: false, spell: null, error: 'Unknown Spell.' };
-      }
-      if (words.length > 4) {
-        return { success: false, spell: null, error: 'Too many words. Max: PREFIX CORE FORM SUFFIX' };
+    // Try to find suffix (can be 2 words like "OF DEVOURING")
+    let suffixId: SuffixId | null = null;
+    let remainingWords = [...words];
+
+    // Check last 2 words for suffix
+    if (remainingWords.length >= 2) {
+      const last2 = remainingWords.slice(-2).join(' ');
+      const suffixMatch = identifySuffix(last2);
+      if (suffixMatch) {
+        suffixId = suffixMatch.id as SuffixId;
+        remainingWords = remainingWords.slice(0, -2);
       }
     }
 
-    // Identify each word
-    const identified = words.map(w => ({ word: w, match: identifyWord(w) }));
+    // Check last 1 word for suffix if no 2-word suffix found
+    if (!suffixId && remainingWords.length >= 1) {
+      const last1 = remainingWords[remainingWords.length - 1];
+      const suffixMatch = identifySuffix(last1);
+      if (suffixMatch) {
+        suffixId = suffixMatch.id as SuffixId;
+        remainingWords = remainingWords.slice(0, -1);
+      }
+    }
 
-    // Check for unknown words
+    if (remainingWords.length < 2) {
+      if (remainingWords.length === 1) {
+        const m = identifyWord(remainingWords[0]);
+        if (m?.type === 'core') return { success: false, spell: null, error: 'Missing Form.' };
+        if (m?.type === 'form') return { success: false, spell: null, error: 'Missing Core.' };
+        if (m?.type === 'prefix') return { success: false, spell: null, error: 'Missing Core and Form.' };
+      }
+      if (remainingWords.length === 0 && suffixId) {
+        return { success: false, spell: null, error: 'Missing Core and Form.' };
+      }
+      return { success: false, spell: null, error: 'Need at least Core + Form.' };
+    }
+
+    if (remainingWords.length > 3) {
+      return { success: false, spell: null, error: 'Too many words before suffix.' };
+    }
+
+    // Identify remaining words
+    const identified = remainingWords.map(w => ({ word: w, match: identifyWord(w) }));
+
     for (const item of identified) {
       if (!item.match) {
         return { success: false, spell: null, error: `Unknown word: "${item.word}"` };
       }
     }
 
-    // Categorize
-    const cores    = identified.filter(i => i.match!.type === 'core');
-    const forms    = identified.filter(i => i.match!.type === 'form');
+    const cores = identified.filter(i => i.match!.type === 'core');
+    const forms = identified.filter(i => i.match!.type === 'form');
     const prefixes = identified.filter(i => i.match!.type === 'prefix');
-    const suffixes = identified.filter(i => i.match!.type === 'suffix');
 
-    // Validate counts
-    if (cores.length === 0) {
-      return { success: false, spell: null, error: 'Missing Core. (e.g. FIRE, ICE, LIGHTNING)' };
-    }
-    if (cores.length > 1) {
-      return { success: false, spell: null, error: 'Only one Core allowed.' };
-    }
-    if (forms.length === 0) {
-      return { success: false, spell: null, error: 'Missing Form. (e.g. BOLT, NOVA, BEAM)' };
-    }
-    if (forms.length > 1) {
-      return { success: false, spell: null, error: 'Only one Form allowed.' };
-    }
-    if (prefixes.length > 1) {
-      return { success: false, spell: null, error: 'Only one Prefix allowed.' };
-    }
-    if (suffixes.length > 1) {
-      return { success: false, spell: null, error: 'Only one Suffix allowed.' };
-    }
+    if (cores.length === 0) return { success: false, spell: null, error: 'Missing Core.' };
+    if (cores.length > 1) return { success: false, spell: null, error: 'Only one Core allowed.' };
+    if (forms.length === 0) return { success: false, spell: null, error: 'Missing Form.' };
+    if (forms.length > 1) return { success: false, spell: null, error: 'Only one Form allowed.' };
+    if (prefixes.length > 1) return { success: false, spell: null, error: 'Only one Prefix allowed.' };
 
-    const coreId   = cores[0].match!.id as CoreId;
-    const formId   = forms[0].match!.id as FormId;
+    const coreId = cores[0].match!.id as CoreId;
+    const formId = forms[0].match!.id as FormId;
     const prefixId = prefixes.length > 0 ? prefixes[0].match!.id as PrefixId : null;
-    const suffixId = suffixes.length > 0 ? suffixes[0].match!.id as SuffixId : null;
 
     return SpellBuilder.build(coreId, formId, prefixId, suffixId);
   }
-
-  // ═════════════════════════════════════════════════════════════════════════
-  //  ASSEMBLY — computes final values from components
-  // ═════════════════════════════════════════════════════════════════════════
 
   private static assemble(
     core: CoreComponent,
@@ -256,8 +172,6 @@ export class SpellBuilder {
     prefix: PrefixComponent | null,
     suffix: SuffixComponent | null
   ): Spell {
-
-    // ── Name ──────────────────────────────────────────────────────────
     const nameParts: string[] = [];
     if (prefix) nameParts.push(prefix.displayName);
     nameParts.push(core.displayName);
@@ -265,35 +179,25 @@ export class SpellBuilder {
     if (suffix) nameParts.push(suffix.displayName);
     const name = nameParts.join(' ');
 
-    // ── Damage ────────────────────────────────────────────────────────
     let damage = core.baseDamage;
     damage *= form.damageMultiplier;
     if (prefix) {
       damage *= prefix.damageMultiplier;
-      // Apply flat extra damage from behavior if applicable
-      if (prefix.behavior.type === 'greater') {
-        damage += prefix.behavior.extraDamageFlat;
-      }
+      if (prefix.behavior.type === 'greater') damage += prefix.behavior.extraDamageFlat;
     }
-    if (suffix) {
-      damage *= suffix.damageMultiplier;
-    }
+    if (suffix) damage *= suffix.damageMultiplier;
     damage = Math.round(damage);
 
-    // ── Mana Cost ─────────────────────────────────────────────────────
     let manaCost = core.manaCost + form.manaCost;
     if (prefix) manaCost += prefix.manaCost;
     if (suffix) manaCost += suffix.manaCost;
 
-    // ── Cooldown ──────────────────────────────────────────────────────
     let cooldown = form.cooldown;
     if (prefix) cooldown *= prefix.cooldownMultiplier;
     if (suffix) cooldown *= suffix.cooldownMultiplier;
     cooldown = Math.round(cooldown);
 
-    // ── Visuals ───────────────────────────────────────────────────────
     const visual: VisualConfig = { ...core.visual };
-    // Prefix/suffix can override specific visual properties
     if (prefix?.visual) {
       if (prefix.visual.color !== undefined) visual.color = prefix.visual.color;
       if (prefix.visual.glowColor !== undefined) visual.glowColor = prefix.visual.glowColor;
@@ -305,25 +209,12 @@ export class SpellBuilder {
       if (suffix.visual.trailColor !== undefined) visual.trailColor = suffix.visual.trailColor;
     }
 
-    // ── Status Effect ─────────────────────────────────────────────────
-    // Deep copy so modifications don't affect the registry
-    const statusEffect: StatusEffectConfig = JSON.parse(
-      JSON.stringify(core.statusEffect)
-    );
+    const statusEffect: StatusEffectConfig = JSON.parse(JSON.stringify(core.statusEffect));
 
     return {
-      name,
-      displayName: name,
-      core,
-      form,
-      prefix,
-      suffix,
-      damage,
-      manaCost,
-      cooldown,
-      statusEffect,
-      targetingType: form.targetingType,
-      visual,
+      name, displayName: name, core, form, prefix, suffix,
+      damage, manaCost, cooldown, statusEffect,
+      targetingType: form.targetingType, visual,
     };
   }
 }
