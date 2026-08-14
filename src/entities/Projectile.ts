@@ -89,6 +89,7 @@ export class Projectile {
       this.orbVisual = OrbVisuals.attach(
         scene, this.sprite, config.spell.visual,
         (config.spell.form.formVisual as OrbVisual).radius, sizeMult,
+        config.spell.core.id,
       );
     } else if (config.spell) {
       this.sprite.setTint(config.spell.visual.color);
@@ -179,8 +180,14 @@ export class Projectile {
       for (let i = 0; i < sb.splitCount; i++) {
         const f = sb.splitCount === 1 ? 0 : (i / (sb.splitCount - 1)) - 0.5;
         const sa = ba + f * spread * 2;
-        const ss: Spell = { ...spell, damage: Math.round(spell.damage * sb.splitDamagePercent), prefix: null };
-        const p = new Projectile(this.scene, { x: this.sprite.x, y: this.sprite.y, angle: sa, spell: ss });
+        const ss: Spell = {
+          ...spell,
+          damage: Math.round(spell.damage * sb.splitDamagePercent),
+          prefix: null,
+        };
+        const p = new Projectile(this.scene, {
+          x: this.sprite.x, y: this.sprite.y, angle: sa, spell: ss,
+        });
         this.scene.events.emit('projectile-created', p);
       }
       this.destroy();
@@ -203,11 +210,17 @@ export class Projectile {
       delay: 40, loop: true,
       callback: () => {
         if (!this.active || !this.sprite.active) return;
-        const dot = this.scene.add.circle(this.sprite.x, this.sprite.y, 3, color, 0.6).setDepth(7);
+        const dot = this.scene.add.circle(
+          this.sprite.x, this.sprite.y, 3, color, 0.6
+        ).setDepth(7);
         this.trail.push(dot);
         this.scene.tweens.add({
           targets: dot, alpha: 0, scaleX: 0.1, scaleY: 0.1, duration: 200,
-          onComplete: () => { dot.destroy(); const i = this.trail.indexOf(dot); if (i !== -1) this.trail.splice(i, 1); },
+          onComplete: () => {
+            dot.destroy();
+            const i = this.trail.indexOf(dot);
+            if (i !== -1) this.trail.splice(i, 1);
+          },
         });
       },
     });

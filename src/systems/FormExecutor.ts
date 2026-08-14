@@ -46,9 +46,10 @@ export class FormExecutor {
     const px = player.sprite.x, py = player.sprite.y;
     const aimAngle = player.getAimAngle();
 
-    const sizeMult = spell.prefix?.behavior.type === 'greater' ? spell.prefix.behavior.sizeMultiplier : 1;
+    const sizeMult = spell.prefix?.behavior.type === 'greater'
+      ? spell.prefix.behavior.sizeMultiplier : 1;
 
-    // Render visuals
+    // Render visuals with core theme
     BladeVisuals.render({
       scene, x: px, y: py,
       aimAngle,
@@ -57,6 +58,7 @@ export class FormExecutor {
       swingDuration: fv.swingDuration,
       visual: spell.visual,
       sizeMultiplier: sizeMult,
+      coreId: spell.core.id,
     });
 
     // Hit detection
@@ -93,19 +95,21 @@ export class FormExecutor {
     const px = player.sprite.x, py = player.sprite.y;
     const angle = Phaser.Math.Angle.Between(px, py, ctx.targetX, ctx.targetY);
 
-    const sizeMult = spell.prefix?.behavior.type === 'greater' ? spell.prefix.behavior.sizeMultiplier : 1;
+    const sizeMult = spell.prefix?.behavior.type === 'greater'
+      ? spell.prefix.behavior.sizeMultiplier : 1;
     const beamWidth = fv.width * sizeMult;
     const beamRange = fv.range * sizeMult;
     const endX = px + Math.cos(angle) * beamRange;
     const endY = py + Math.sin(angle) * beamRange;
 
-    // Render visuals
+    // Render visuals with core theme
     BeamVisuals.render({
       scene, startX: px, startY: py, endX, endY,
       width: fv.width,
       castDuration: fv.castDuration,
       visual: spell.visual,
       sizeMultiplier: sizeMult,
+      coreId: spell.core.id,
     });
 
     const eCtx: EffectContext = {
@@ -116,8 +120,12 @@ export class FormExecutor {
     // Initial hit
     for (const enemy of enemies) {
       if (!enemy.alive) continue;
-      const dist = FormExecutor.pointToLineDist(enemy.sprite.x, enemy.sprite.y, px, py, endX, endY);
-      const t = FormExecutor.dotAlongLine(enemy.sprite.x, enemy.sprite.y, px, py, endX, endY);
+      const dist = FormExecutor.pointToLineDist(
+        enemy.sprite.x, enemy.sprite.y, px, py, endX, endY
+      );
+      const t = FormExecutor.dotAlongLine(
+        enemy.sprite.x, enemy.sprite.y, px, py, endX, endY
+      );
       if (dist <= beamWidth + ENEMY_RADIUS && t >= 0 && t <= 1) {
         enemy.takeDamage(spell.damage);
         CoreEffectExecutor.apply(eCtx, enemy);
@@ -126,12 +134,17 @@ export class FormExecutor {
 
     // Tick damage
     const tickTimer = scene.time.addEvent({
-      delay: fv.tickInterval, repeat: Math.floor(fv.castDuration / fv.tickInterval) - 1,
+      delay: fv.tickInterval,
+      repeat: Math.floor(fv.castDuration / fv.tickInterval) - 1,
       callback: () => {
         for (const enemy of enemies) {
           if (!enemy.alive) continue;
-          const dist = FormExecutor.pointToLineDist(enemy.sprite.x, enemy.sprite.y, px, py, endX, endY);
-          const t = FormExecutor.dotAlongLine(enemy.sprite.x, enemy.sprite.y, px, py, endX, endY);
+          const dist = FormExecutor.pointToLineDist(
+            enemy.sprite.x, enemy.sprite.y, px, py, endX, endY
+          );
+          const t = FormExecutor.dotAlongLine(
+            enemy.sprite.x, enemy.sprite.y, px, py, endX, endY
+          );
           if (dist <= beamWidth + ENEMY_RADIUS && t >= 0 && t <= 1) {
             enemy.takeDamage(Math.round(spell.damage * 0.3));
             CoreEffectExecutor.apply(eCtx, enemy);
@@ -165,16 +178,19 @@ export class FormExecutor {
     const { scene, spell, enemies } = ctx;
     const fv = spell.form.formVisual as MineVisual;
 
-    const sizeMult = spell.prefix?.behavior.type === 'greater' ? spell.prefix.behavior.sizeMultiplier : 1;
+    const sizeMult = spell.prefix?.behavior.type === 'greater'
+      ? spell.prefix.behavior.sizeMultiplier : 1;
     let mineX = Phaser.Math.Clamp(ctx.targetX, WALL_THICKNESS + 10, ROOM_WIDTH - WALL_THICKNESS - 10);
     let mineY = Phaser.Math.Clamp(ctx.targetY, WALL_THICKNESS + 10, ROOM_HEIGHT - WALL_THICKNESS - 10);
 
     const explosionRadius = fv.explosionRadius * sizeMult;
     const triggerRadius = fv.triggerRadius * sizeMult;
 
-    // Create visual mine
+    // Create visual mine with core theme
     const mineVisual = MineVisuals.create(
-      scene, mineX, mineY, fv.triggerRadius, spell.visual, sizeMult,
+      scene, mineX, mineY, fv.triggerRadius,
+      spell.visual, sizeMult,
+      spell.core.id,
     );
 
     let armed = false;
@@ -238,16 +254,18 @@ export class FormExecutor {
     const fv = spell.form.formVisual as NovaVisual;
     const cx = ctx.targetX, cy = ctx.targetY;
 
-    const sizeMult = spell.prefix?.behavior.type === 'greater' ? spell.prefix.behavior.sizeMultiplier : 1;
+    const sizeMult = spell.prefix?.behavior.type === 'greater'
+      ? spell.prefix.behavior.sizeMultiplier : 1;
     const novaRadius = fv.radius * sizeMult;
 
-    // Render visuals
+    // Render visuals with core theme
     NovaVisuals.render({
       scene, x: cx, y: cy,
       radius: fv.radius,
       expandDuration: fv.expandDuration,
       visual: spell.visual,
       sizeMultiplier: sizeMult,
+      coreId: spell.core.id,
     });
 
     // Hit detection

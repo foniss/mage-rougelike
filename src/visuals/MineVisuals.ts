@@ -1,13 +1,8 @@
 // src/visuals/MineVisuals.ts
-//
-// MINE: Stationary magical trap.
-// - Rune circle with inner pattern
-// - Visible arming transition
-// - Pulsing when armed
-// - Distinct detonation explosion
 
 import Phaser from 'phaser';
-import { VisualConfig } from '../config/spellComponents';
+import { VisualConfig, CoreId } from '../config/spellComponents';
+import { getCoreTheme } from './CoreVisualTheme';
 
 export interface MineVisualHandle {
   setArmed: () => void;
@@ -25,7 +20,9 @@ export class MineVisuals {
     triggerRadius: number,
     visual: VisualConfig,
     sizeMultiplier: number,
+    coreId: CoreId,
   ): MineVisualHandle {
+    const theme = getCoreTheme(coreId);
     const container = scene.add.container(x, y).setDepth(6);
 
     const scaledTrigger = triggerRadius * sizeMultiplier;
@@ -92,6 +89,7 @@ export class MineVisuals {
     });
 
     let armPulse: Phaser.Tweens.Tween | null = null;
+    let ambientTimer: Phaser.Time.TimerEvent | null = null;
 
     const setArmed = () => {
       // Flash bright
@@ -122,12 +120,25 @@ export class MineVisuals {
 
       // Rune brightens
       outerRune.setStrokeStyle(2, visual.glowColor, 0.7);
+
+      // Core-themed ambient particles while armed
+      ambientTimer = scene.time.addEvent({
+        delay: 200,
+        loop: true,
+        callback: () => {
+          theme.spawnAmbientParticle(scene, x, y, visual);
+        },
+      });
     };
 
     const detonate = (explosionRadius: number) => {
       if (armPulse) armPulse.destroy();
+      if (ambientTimer) ambientTimer.destroy();
 
       const scaledExplosion = explosionRadius * sizeMultiplier;
+
+      // Core-themed impact at detonation center
+      theme.renderImpact(scene, x, y, visual, scaledExplosion);
 
       // Bright flash
       const flash = scene.add.circle(x, y, 15, 0xffffff, 0.8).setDepth(25);
@@ -178,20 +189,14 @@ export class MineVisuals {
         onComplete: () => fillFlash.destroy(),
       });
 
-      // Explosion particles
+      // Core-themed explosion particles
       for (let i = 0; i < 16; i++) {
         const angle = (i / 16) * Math.PI * 2 + Math.random() * 0.3;
         const dist = scaledExplosion * (0.3 + Math.random() * 0.7);
-        const particle = scene.add.circle(x, y, 2 + Math.random() * 3, visual.trailColor, 0.7).setDepth(25);
-
-        scene.tweens.add({
-          targets: particle,
-          x: x + Math.cos(angle) * dist,
-          y: y + Math.sin(angle) * dist,
-          alpha: 0,
-          duration: 200 + Math.random() * 200,
-          onComplete: () => particle.destroy(),
-        });
+        const px = x + Math.cos(angle) * dist * 0.3;
+        const py = y + Math.sin(angle) * dist * 0.3;
+        theme.spawnTrailParticle(scene, px, py, visual,
+          Math.cos(angle) * 60, Math.sin(angle) * 60);
       }
 
       // Destroy the mine
@@ -201,6 +206,7 @@ export class MineVisuals {
 
     const expire = () => {
       if (armPulse) armPulse.destroy();
+      if (ambientTimer) ambientTimer.destroy();
       scene.tweens.add({
         targets: [container],
         alpha: 0, scaleX: 0.3, scaleY: 0.3,
