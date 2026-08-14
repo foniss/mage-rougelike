@@ -9,6 +9,10 @@ import { CoreEffectExecutor, EffectContext } from './CoreEffectExecutor';
 import { StatusEffectSystem } from './StatusEffectSystem';
 import { ENEMY_RADIUS, ROOM_WIDTH, ROOM_HEIGHT, WALL_THICKNESS } from '../config/constants';
 import { Player } from '../entities/Player';
+import { BladeVisuals } from '../visuals/BladeVisuals';
+import { BeamVisuals } from '../visuals/BeamVisuals';
+import { MineVisuals } from '../visuals/MineVisuals';
+import { NovaVisuals } from '../visuals/NovaVisuals';
 
 export interface FormContext {
   scene: Phaser.Scene;
@@ -42,35 +46,23 @@ export class FormExecutor {
     const px = player.sprite.x, py = player.sprite.y;
     const aimAngle = player.getAimAngle();
 
-    let range = fv.range;
-    let arcAngle = fv.arcAngle;
-    if (spell.prefix?.behavior.type === 'greater') {
-      range *= spell.prefix.behavior.sizeMultiplier;
-      arcAngle *= spell.prefix.behavior.sizeMultiplier;
-    }
+    const sizeMult = spell.prefix?.behavior.type === 'greater' ? spell.prefix.behavior.sizeMultiplier : 1;
 
-    const halfArc = Phaser.Math.DegToRad(arcAngle / 2);
-
-    // Visual arc
-    const gfx = scene.add.graphics().setDepth(20);
-    gfx.fillStyle(spell.visual.color, 0.3);
-    gfx.beginPath();
-    gfx.moveTo(px, py);
-    gfx.arc(px, py, range, aimAngle - halfArc, aimAngle + halfArc, false);
-    gfx.closePath();
-    gfx.fillPath();
-
-    gfx.lineStyle(2, spell.visual.glowColor, 0.6);
-    gfx.beginPath();
-    gfx.arc(px, py, range, aimAngle - halfArc, aimAngle + halfArc, false);
-    gfx.strokePath();
-
-    scene.tweens.add({
-      targets: gfx, alpha: 0, duration: fv.swingDuration,
-      onComplete: () => gfx.destroy(),
+    // Render visuals
+    BladeVisuals.render({
+      scene, x: px, y: py,
+      aimAngle,
+      range: fv.range,
+      arcAngleDeg: fv.arcAngle,
+      swingDuration: fv.swingDuration,
+      visual: spell.visual,
+      sizeMultiplier: sizeMult,
     });
 
-    // Hit enemies in arc
+    // Hit detection
+    const range = fv.range * sizeMult;
+    const halfArc = Phaser.Math.DegToRad(fv.arcAngle * sizeMult / 2);
+
     const eCtx: EffectContext = {
       scene, spell, sourceX: px, sourceY: py,
       enemies, statusEffects: ctx.statusEffects,
@@ -101,83 +93,54 @@ export class FormExecutor {
     const px = player.sprite.x, py = player.sprite.y;
     const angle = Phaser.Math.Angle.Between(px, py, ctx.targetX, ctx.targetY);
 
-    let beamWidth = fv.width;
-    let beamRange = fv.range;
-    if (spell.prefix?.behavior.type === 'greater') {
-      beamWidth *= spell.prefix.behavior.sizeMultiplier;
-      beamRange *= spell.prefix.behavior.sizeMultiplier;
-    }
-
+    const sizeMult = spell.prefix?.behavior.type === 'greater' ? spell.prefix.behavior.sizeMultiplier : 1;
+    const beamWidth = fv.width * sizeMult;
+    const beamRange = fv.range * sizeMult;
     const endX = px + Math.cos(angle) * beamRange;
     const endY = py + Math.sin(angle) * beamRange;
 
-    // Track which enemies have been hit to avoid double-hitting
-    const hitSet = new Set<Enemy>();
-    let ticksRemaining = Math.floor(fv.castDuration / fv.tickInterval);
-
-    // Create beam visual
-    const beamGfx = scene.add.graphics().setDepth(20);
-    const beamGlow = scene.add.graphics().setDepth(19);
-
-    const drawBeam = (alpha: number) => {
-      beamGfx.clear();
-      beamGfx.lineStyle(beamWidth / 2, spell.visual.color, alpha);
-      beamGfx.lineBetween(px, py, endX, endY);
-      beamGlow.clear();
-      beamGlow.lineStyle(beamWidth, spell.visual.glowColor, alpha * 0.3);
-      beamGlow.lineBetween(px, py, endX, endY);
-    };
-
-    drawBeam(0.8);
+    // Render visuals
+    BeamVisuals.render({
+      scene, startX: px, startY: py, endX, endY,
+      width: fv.width,
+      castDuration: fv.castDuration,
+      visual: spell.visual,
+      sizeMultiplier: sizeMult,
+    });
 
     const eCtx: EffectContext = {
       scene, spell, sourceX: px, sourceY: py,
       enemies, statusEffects: ctx.statusEffects,
     };
 
-    // Tick damage
-    const tickTimer = scene.time.addEvent({
-      delay: fv.tickInterval, repeat: ticksRemaining - 1,
-      callback: () => {
-        for (const enemy of enemies) {
-          if (!enemy.alive) continue;
-          const dist = FormExecutor.pointToLineDist(
-            enemy.sprite.x, enemy.sprite.y, px, py, endX, endY
-          );
-          const t = FormExecutor.dotAlongLine(
-            enemy.sprite.x, enemy.sprite.y, px, py, endX, endY
-          );
-          if (dist <= beamWidth + ENEMY_RADIUS && t >= 0 && t <= 1) {
-            enemy.takeDamage(spell.damage * 0.3);
-            CoreEffectExecutor.apply(eCtx, enemy);
-          }
-        }
-      },
-    });
-
     // Initial hit
     for (const enemy of enemies) {
       if (!enemy.alive) continue;
-      const dist = FormExecutor.pointToLineDist(
-        enemy.sprite.x, enemy.sprite.y, px, py, endX, endY
-      );
-      const t = FormExecutor.dotAlongLine(
-        enemy.sprite.x, enemy.sprite.y, px, py, endX, endY
-      );
+      const dist = FormExecutor.pointToLineDist(enemy.sprite.x, enemy.sprite.y, px, py, endX, endY);
+      const t = FormExecutor.dotAlongLine(enemy.sprite.x, enemy.sprite.y, px, py, endX, endY);
       if (dist <= beamWidth + ENEMY_RADIUS && t >= 0 && t <= 1) {
         enemy.takeDamage(spell.damage);
         CoreEffectExecutor.apply(eCtx, enemy);
       }
     }
 
-    // Fade out after cast duration
-    scene.time.delayedCall(fv.castDuration, () => {
-      tickTimer.destroy();
-      scene.tweens.add({
-        targets: [beamGfx, beamGlow], alpha: 0, duration: 200,
-        onComplete: () => { beamGfx.destroy(); beamGlow.destroy(); },
-      });
+    // Tick damage
+    const tickTimer = scene.time.addEvent({
+      delay: fv.tickInterval, repeat: Math.floor(fv.castDuration / fv.tickInterval) - 1,
+      callback: () => {
+        for (const enemy of enemies) {
+          if (!enemy.alive) continue;
+          const dist = FormExecutor.pointToLineDist(enemy.sprite.x, enemy.sprite.y, px, py, endX, endY);
+          const t = FormExecutor.dotAlongLine(enemy.sprite.x, enemy.sprite.y, px, py, endX, endY);
+          if (dist <= beamWidth + ENEMY_RADIUS && t >= 0 && t <= 1) {
+            enemy.takeDamage(Math.round(spell.damage * 0.3));
+            CoreEffectExecutor.apply(eCtx, enemy);
+          }
+        }
+      },
     });
+
+    scene.time.delayedCall(fv.castDuration, () => tickTimer.destroy());
   }
 
   // ── ORB ─────────────────────────────────────────────────────────────────
@@ -202,39 +165,28 @@ export class FormExecutor {
     const { scene, spell, enemies } = ctx;
     const fv = spell.form.formVisual as MineVisual;
 
-    let mineX = ctx.targetX;
-    let mineY = ctx.targetY;
-    // Clamp to room
-    mineX = Phaser.Math.Clamp(mineX, WALL_THICKNESS + 10, ROOM_WIDTH - WALL_THICKNESS - 10);
-    mineY = Phaser.Math.Clamp(mineY, WALL_THICKNESS + 10, ROOM_HEIGHT - WALL_THICKNESS - 10);
+    const sizeMult = spell.prefix?.behavior.type === 'greater' ? spell.prefix.behavior.sizeMultiplier : 1;
+    let mineX = Phaser.Math.Clamp(ctx.targetX, WALL_THICKNESS + 10, ROOM_WIDTH - WALL_THICKNESS - 10);
+    let mineY = Phaser.Math.Clamp(ctx.targetY, WALL_THICKNESS + 10, ROOM_HEIGHT - WALL_THICKNESS - 10);
 
-    let explosionRadius = fv.explosionRadius;
-    let triggerRadius = fv.triggerRadius;
-    if (spell.prefix?.behavior.type === 'greater') {
-      explosionRadius *= spell.prefix.behavior.sizeMultiplier;
-      triggerRadius *= spell.prefix.behavior.sizeMultiplier;
-    }
+    const explosionRadius = fv.explosionRadius * sizeMult;
+    const triggerRadius = fv.triggerRadius * sizeMult;
 
-    // Mine visual
-    const mineCircle = scene.add.circle(mineX, mineY, fv.radius, spell.visual.color, 0.6);
-    mineCircle.setDepth(6).setStrokeStyle(1, spell.visual.glowColor, 0.5);
-
-    const triggerRing = scene.add.circle(mineX, mineY, triggerRadius, spell.visual.color, 0.05);
-    triggerRing.setDepth(5).setStrokeStyle(1, spell.visual.color, 0.15);
-
-    // Pulse animation
-    scene.tweens.add({
-      targets: mineCircle, scaleX: 1.2, scaleY: 1.2,
-      duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
-    });
+    // Create visual mine
+    const mineVisual = MineVisuals.create(
+      scene, mineX, mineY, fv.triggerRadius, spell.visual, sizeMult,
+    );
 
     let armed = false;
     let detonated = false;
 
-    // Arm after delay
-    scene.time.delayedCall(fv.armDelay, () => { armed = true; });
+    scene.time.delayedCall(fv.armDelay, () => {
+      if (!detonated) {
+        armed = true;
+        mineVisual.setArmed();
+      }
+    });
 
-    // Check for enemies
     const checkTimer = scene.time.addEvent({
       delay: 50, loop: true,
       callback: () => {
@@ -250,35 +202,18 @@ export class FormExecutor {
       },
     });
 
-    // Auto-expire
     scene.time.delayedCall(fv.lifetime, () => {
       if (!detonated) {
         detonated = true;
         checkTimer.destroy();
-        scene.tweens.add({
-          targets: [mineCircle, triggerRing], alpha: 0, duration: 300,
-          onComplete: () => { mineCircle.destroy(); triggerRing.destroy(); },
-        });
+        mineVisual.expire();
       }
     });
 
     const detonate = () => {
       detonated = true;
       checkTimer.destroy();
-
-      // Explosion visual
-      const explosion = scene.add.circle(mineX, mineY, 10, spell.visual.color, 0.5);
-      explosion.setDepth(20).setStrokeStyle(2, spell.visual.glowColor, 0.8);
-
-      scene.tweens.add({
-        targets: explosion,
-        scaleX: explosionRadius / 10, scaleY: explosionRadius / 10,
-        alpha: 0, duration: 350, ease: 'Power2',
-        onComplete: () => explosion.destroy(),
-      });
-
-      mineCircle.destroy();
-      triggerRing.destroy();
+      mineVisual.detonate(fv.explosionRadius);
 
       const eCtx: EffectContext = {
         scene, spell, sourceX: mineX, sourceY: mineY,
@@ -301,31 +236,21 @@ export class FormExecutor {
   private static executeNova(ctx: FormContext): void {
     const { scene, spell, enemies } = ctx;
     const fv = spell.form.formVisual as NovaVisual;
-
-    let novaRadius = fv.radius;
-    if (spell.prefix?.behavior.type === 'greater') {
-      novaRadius *= spell.prefix.behavior.sizeMultiplier;
-    }
-
     const cx = ctx.targetX, cy = ctx.targetY;
 
-    const ring = scene.add.circle(cx, cy, 10, spell.visual.color, 0.4);
-    ring.setDepth(20).setStrokeStyle(2, spell.visual.color, 0.8);
+    const sizeMult = spell.prefix?.behavior.type === 'greater' ? spell.prefix.behavior.sizeMultiplier : 1;
+    const novaRadius = fv.radius * sizeMult;
 
-    scene.tweens.add({
-      targets: ring,
-      scaleX: novaRadius / 10, scaleY: novaRadius / 10,
-      alpha: 0, duration: fv.expandDuration, ease: 'Power2',
-      onComplete: () => ring.destroy(),
+    // Render visuals
+    NovaVisuals.render({
+      scene, x: cx, y: cy,
+      radius: fv.radius,
+      expandDuration: fv.expandDuration,
+      visual: spell.visual,
+      sizeMultiplier: sizeMult,
     });
 
-    const flash = scene.add.circle(cx, cy, novaRadius * 0.3, spell.visual.glowColor, 0.5);
-    flash.setDepth(19);
-    scene.tweens.add({
-      targets: flash, alpha: 0, scaleX: 3, scaleY: 3,
-      duration: 300, onComplete: () => flash.destroy(),
-    });
-
+    // Hit detection
     const eCtx: EffectContext = {
       scene, spell, sourceX: cx, sourceY: cy,
       enemies, statusEffects: ctx.statusEffects,
