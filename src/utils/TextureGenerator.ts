@@ -19,8 +19,12 @@ import {
 } from '../config/constants';
 
 export function generateTextures(scene: Phaser.Scene): void {
+  generateEntityTextures(scene);
+  regenerateRoomTextures(scene);
+  generateDecorationTextures(scene);
+}
 
-  // ── Player ──────────────────────────────────────────────────────────────
+function generateEntityTextures(scene: Phaser.Scene): void {
   const playerSize = PLAYER_RADIUS * 2 + 8;
   const pg = scene.make.graphics({ x: 0, y: 0 });
   const pc = playerSize / 2;
@@ -69,6 +73,12 @@ export function generateTextures(scene: Phaser.Scene): void {
   prg.fillCircle(prc, prc, PROJECTILE_RADIUS * 0.4);
   prg.generateTexture('projectile', projSize, projSize);
   prg.destroy();
+}
+
+export function regenerateRoomTextures(scene: Phaser.Scene): void {
+  if (scene.textures.exists('floor')) scene.textures.remove('floor');
+  if (scene.textures.exists('wall-h')) scene.textures.remove('wall-h');
+  if (scene.textures.exists('wall-v')) scene.textures.remove('wall-v');
 
   // ── Floor ────────────────────────────────────────────────────────────────
   const fg = scene.make.graphics({ x: 0, y: 0 });
@@ -102,8 +112,9 @@ export function generateTextures(scene: Phaser.Scene): void {
   wv.fillRect(0, 0, 6, ROOM_HEIGHT);
   wv.generateTexture('wall-v', WALL_THICKNESS, ROOM_HEIGHT);
   wv.destroy();
+}
 
-  // ── Decoration ───────────────────────────────────────────────────────────
+function generateDecorationTextures(scene: Phaser.Scene): void {
   const decSize = 24;
   const dcg = scene.make.graphics({ x: 0, y: 0 });
   dcg.fillStyle(COLOR_DECORATION, 1);

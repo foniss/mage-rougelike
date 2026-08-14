@@ -3,6 +3,7 @@
 import Phaser from 'phaser';
 import { Spell } from '../systems/SpellBuilder';
 import { getCoreTheme } from '../visuals/CoreVisualTheme';
+import { uiText, applyTextShadow, GLASS } from '../config/uiStyles';
 
 export class SpellAssemblyPreview {
   private scene: Phaser.Scene;
@@ -22,47 +23,40 @@ export class SpellAssemblyPreview {
   }
 
   private create(): void {
-    const w = 300, h = 260;
+    const w = 300, h = 280;
 
-    // Background
-    const bg = this.scene.add.rectangle(0, 0, w, h, 0x08060f, 0.9);
-    bg.setStrokeStyle(1, 0x3a2f5a, 0.4);
+    const bg = this.scene.add.rectangle(0, 0, w, h, GLASS.panelFill, 0.55);
+    bg.setStrokeStyle(1, GLASS.panelStroke, GLASS.panelStrokeAlpha);
     this.container.add(bg);
 
-    // Preview visual area
-    this.previewGlow = this.scene.add.circle(0, -50, 30, 0x333355, 0.1);
+    this.previewGlow = this.scene.add.circle(0, -72, 34, 0x333355, 0.12);
     this.container.add(this.previewGlow);
-    this.previewCircle = this.scene.add.circle(0, -50, 16, 0x444466, 0.3);
+    this.previewCircle = this.scene.add.circle(0, -72, 18, 0x444466, 0.45);
     this.container.add(this.previewCircle);
 
-    // Spell name
-    this.spellNameText = this.scene.add.text(0, -8, 'Select Core + Form', {
-      fontFamily: '"Courier New", monospace', fontSize: '14px',
-      color: '#666677', fontStyle: 'bold',
-    }).setOrigin(0.5, 0);
+    this.spellNameText = this.scene.add.text(0, -28, 'Select Core + Form', uiText(16, '#aab0cc', true))
+      .setOrigin(0.5, 0);
+    applyTextShadow(this.spellNameText);
     this.container.add(this.spellNameText);
 
-    // Component breakdown
-    const compLabels = ['PREFIX:', 'CORE:', 'FORM:', 'SUFFIX:'];
+    const compLabels = ['Prefix', 'Core', 'Form', 'Suffix'];
     for (let i = 0; i < 4; i++) {
-      const t = this.scene.add.text(-130, 18 + i * 16, `${compLabels[i]}  —`, {
-        fontFamily: '"Courier New", monospace', fontSize: '9px', color: '#555566',
-      });
+      const t = this.scene.add.text(-132, 8 + i * 22, `${compLabels[i]}:  —`, uiText(12, '#8899aa'));
+      applyTextShadow(t);
       this.container.add(t);
       this.componentTexts.push(t);
     }
 
-    // Stats
-    this.statsText = this.scene.add.text(-130, 90, '', {
-      fontFamily: '"Courier New", monospace', fontSize: '9px', color: '#777799', lineSpacing: 3,
+    this.statsText = this.scene.add.text(-132, 104, '', {
+      ...uiText(12, '#99aacc'),
+      lineSpacing: 5,
     });
+    applyTextShadow(this.statsText);
     this.container.add(this.statsText);
 
-    // Error
-    this.errorText = this.scene.add.text(0, 30, '', {
-      fontFamily: '"Courier New", monospace', fontSize: '10px',
-      color: '#ff5555', fontStyle: 'bold',
-    }).setOrigin(0.5, 0).setAlpha(0);
+    this.errorText = this.scene.add.text(0, 20, '', uiText(13, '#ff6666', true))
+      .setOrigin(0.5, 0).setAlpha(0);
+    applyTextShadow(this.errorText);
     this.container.add(this.errorText);
   }
 
@@ -70,28 +64,26 @@ export class SpellAssemblyPreview {
     const hex = '#' + spell.visual.color.toString(16).padStart(6, '0');
     this.spellNameText.setText(spell.name).setColor(hex);
 
-    this.componentTexts[0].setText(`PREFIX:  ${spell.prefix?.displayName || '—'}`).setColor(spell.prefix ? '#88cc88' : '#444455');
-    this.componentTexts[1].setText(`CORE:    ${spell.core.displayName}`).setColor(hex);
-    this.componentTexts[2].setText(`FORM:    ${spell.form.displayName}`).setColor('#8888dd');
-    this.componentTexts[3].setText(`SUFFIX:  ${spell.suffix?.displayName || '—'}`).setColor(spell.suffix ? '#ccaa66' : '#444455');
+    this.componentTexts[0].setText(`Prefix:  ${spell.prefix?.displayName || '—'}`).setColor(spell.prefix ? '#88cc88' : '#667788');
+    this.componentTexts[1].setText(`Core:    ${spell.core.displayName}`).setColor(hex);
+    this.componentTexts[2].setText(`Form:    ${spell.form.displayName}`).setColor('#99aaff');
+    this.componentTexts[3].setText(`Suffix:  ${spell.suffix?.displayName || '—'}`).setColor(spell.suffix ? '#ddbb77' : '#667788');
 
     const cdSec = (spell.cooldown / 1000).toFixed(2);
     const effectStr = spell.statusEffect.type !== 'none' ? spell.statusEffect.type.toUpperCase() : 'None';
     this.statsText.setText(
-      `Mana:     ${spell.manaCost}\n` +
-      `Cooldown: ${cdSec}s\n` +
-      `Damage:   ${spell.damage}\n` +
-      `Target:   ${spell.targetingType}\n` +
-      `Effect:   ${effectStr}`
+      `Mana       ${spell.manaCost}\n` +
+      `Cooldown   ${cdSec}s\n` +
+      `Damage     ${spell.damage}\n` +
+      `Target     ${spell.targetingType}\n` +
+      `Effect     ${effectStr}`
     );
 
     this.errorText.setAlpha(0);
 
-    // Visual preview
-    this.previewCircle.setFillStyle(spell.visual.color, 0.6);
-    this.previewGlow.setFillStyle(spell.visual.color, 0.12);
+    this.previewCircle.setFillStyle(spell.visual.color, 0.7);
+    this.previewGlow.setFillStyle(spell.visual.color, 0.18);
 
-    // Themed particles
     if (this.particleTimer) this.particleTimer.destroy();
     const theme = getCoreTheme(spell.core.id);
     this.particleTimer = this.scene.time.addEvent({
@@ -99,27 +91,27 @@ export class SpellAssemblyPreview {
       callback: () => {
         const worldPos = this.container.getWorldTransformMatrix();
         theme.spawnAmbientParticle(this.scene,
-          worldPos.tx, worldPos.ty - 50, spell.visual);
+          worldPos.tx, worldPos.ty - 72, spell.visual);
       },
     });
   }
 
   showError(error: string, suggestion?: string): void {
-    this.spellNameText.setText('Invalid').setColor('#ff5555');
+    this.spellNameText.setText('Invalid').setColor('#ff6666');
     this.statsText.setText('');
     this.errorText.setText(error + (suggestion ? '\n' + suggestion : '')).setAlpha(1);
-    this.previewCircle.setFillStyle(0x442222, 0.3);
-    this.previewGlow.setFillStyle(0x442222, 0.05);
+    this.previewCircle.setFillStyle(0x442222, 0.35);
+    this.previewGlow.setFillStyle(0x442222, 0.08);
     if (this.particleTimer) { this.particleTimer.destroy(); this.particleTimer = null; }
   }
 
   showEmpty(): void {
-    this.spellNameText.setText('Select Core + Form').setColor('#666677');
-    for (const t of this.componentTexts) t.setText('').setColor('#444455');
+    this.spellNameText.setText('Select Core + Form').setColor('#aab0cc');
+    for (const t of this.componentTexts) t.setText('').setColor('#667788');
     this.statsText.setText('');
     this.errorText.setAlpha(0);
-    this.previewCircle.setFillStyle(0x444466, 0.3);
-    this.previewGlow.setFillStyle(0x333355, 0.1);
+    this.previewCircle.setFillStyle(0x444466, 0.35);
+    this.previewGlow.setFillStyle(0x333355, 0.12);
     if (this.particleTimer) { this.particleTimer.destroy(); this.particleTimer = null; }
   }
 

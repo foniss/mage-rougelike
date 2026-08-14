@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { initViewport } from '../config/viewport';
 import { generateTextures } from '../utils/TextureGenerator';
 
 export class BootScene extends Phaser.Scene {
@@ -7,7 +8,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    // Generate all textures, then start the game
+    initViewport(this.game);
     generateTextures(this);
     this.scene.start('GameScene');
   }

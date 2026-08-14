@@ -12,6 +12,12 @@ import {
   getAllCoreIds, getAllFormIds, getAllPrefixIds, getAllSuffixIds,
 } from '../config/spellComponents';
 import { ROOM_WIDTH, ROOM_HEIGHT, SPELL_SLOT_COUNT } from '../config/constants';
+import {
+  uiText, applyTextShadow, createGlassPanel, GLASS,
+} from '../config/uiStyles';
+
+const LEFT_PANEL_W = 500;
+const RIGHT_PANEL_W = 340;
 
 export class GrimoireScene extends Phaser.Scene {
   private grimoireSystem!: GrimoireSystem;
@@ -47,7 +53,6 @@ export class GrimoireScene extends Phaser.Scene {
     this.slotBtns = [];
     this.slotTexts = [];
 
-    // Load existing slot config
     const existing = this.grimoireSystem.slots[this.targetSlotIndex]?.spell;
     if (existing) {
       this.selectedCore = existing.core.id;
@@ -62,7 +67,7 @@ export class GrimoireScene extends Phaser.Scene {
     }
 
     this.createOverlay();
-    this.createBookPanel();
+    this.createPanels();
     this.createTitle();
     this.createComponentRows();
     this.createPreview();
@@ -76,44 +81,46 @@ export class GrimoireScene extends Phaser.Scene {
     this.updateCompatibility();
   }
 
-  // ── Layout ──────────────────────────────────────────────────────────────
+  // ── Layout — edge panels keep the arena visible in the center ───────────
 
   private createOverlay(): void {
+    // Very light full-screen tint — combat stays readable behind the UI
     const overlay = this.add.rectangle(
-      ROOM_WIDTH / 2, ROOM_HEIGHT / 2, ROOM_WIDTH, ROOM_HEIGHT, 0x000000, 0.55
+      ROOM_WIDTH / 2, ROOM_HEIGHT / 2, ROOM_WIDTH, ROOM_HEIGHT,
+      GLASS.overlayTint, GLASS.overlayAlpha,
     ).setDepth(200);
-    // Make overlay interactive so clicks don't pass through to game
     overlay.setInteractive();
   }
 
-  private createBookPanel(): void {
-    const cx = ROOM_WIDTH / 2, cy = ROOM_HEIGHT / 2;
-    this.add.rectangle(cx, cy, 780, 640, 0x2a1f3a, 0.9).setDepth(201);
-    this.add.rectangle(cx, cy, 770, 630, 0x0e0c18, 0.97).setDepth(202);
-    this.add.rectangle(cx, cy, 754, 614, 0, 0).setDepth(203)
-      .setStrokeStyle(1, 0x3a2f5a, 0.3);
+  private createPanels(): void {
+    const leftW = Math.min(LEFT_PANEL_W, ROOM_WIDTH * 0.38);
+    const rightW = Math.min(RIGHT_PANEL_W, ROOM_WIDTH * 0.3);
+
+    createGlassPanel(this, leftW / 2, ROOM_HEIGHT / 2, leftW, ROOM_HEIGHT, 201);
+    createGlassPanel(this, ROOM_WIDTH - rightW / 2, ROOM_HEIGHT / 2, rightW, ROOM_HEIGHT, 201);
+
+    // Accent lines on inner edges
+    this.add.rectangle(leftW, ROOM_HEIGHT / 2, 1, ROOM_HEIGHT, GLASS.accentLine, GLASS.accentLineAlpha).setDepth(202);
+    this.add.rectangle(ROOM_WIDTH - rightW, ROOM_HEIGHT / 2, 1, ROOM_HEIGHT, GLASS.accentLine, GLASS.accentLineAlpha).setDepth(202);
   }
 
   private createTitle(): void {
-    const cx = ROOM_WIDTH / 2, topY = ROOM_HEIGHT / 2 - 295;
-    this.add.text(cx - 130, topY, '✦', {
-      fontFamily: '"Courier New", monospace', fontSize: '14px', color: '#6b5b95',
-    }).setOrigin(0.5).setDepth(210);
-    this.add.text(cx, topY, 'GRIMOIRE', {
-      fontFamily: '"Courier New", monospace', fontSize: '22px',
-      color: '#c8b8e8', fontStyle: 'bold',
-    }).setOrigin(0.5).setDepth(210);
-    this.add.text(cx + 130, topY, '✦', {
-      fontFamily: '"Courier New", monospace', fontSize: '14px', color: '#6b5b95',
-    }).setOrigin(0.5).setDepth(210);
-    this.add.rectangle(cx, topY + 18, 380, 1, 0x3a2f5a, 0.4).setDepth(210);
+    const topY = 28;
+    const title = this.add.text(ROOM_WIDTH / 2, topY, 'GRIMOIRE', uiText(20, '#ddd0f0', true))
+      .setOrigin(0.5).setDepth(210);
+    applyTextShadow(title);
+
+    const subtitle = this.add.text(ROOM_WIDTH / 2, topY + 24, 'Combat continues behind you', uiText(12, '#888899'))
+      .setOrigin(0.5).setDepth(210);
+    applyTextShadow(subtitle);
   }
 
   // ── Component Rows ──────────────────────────────────────────────────────
 
   private createComponentRows(): void {
-    const leftX = ROOM_WIDTH / 2 - 365;
-    let rowY = ROOM_HEIGHT / 2 - 248;
+    const leftW = Math.min(LEFT_PANEL_W, ROOM_WIDTH * 0.38);
+    const leftX = 20;
+    let rowY = 72;
 
     const prefixOpts = this.buildOptions('prefix');
     this.prefixRow = new ComponentRow(
@@ -121,7 +128,7 @@ export class GrimoireScene extends Phaser.Scene {
       (opt) => { this.selectedPrefix = opt.id as PrefixId | null; this.onSelectionChanged(); },
     );
     this.prefixRow.setSelectedId(this.selectedPrefix);
-    rowY += 82;
+    rowY += 96;
 
     const coreOpts = this.buildOptions('core');
     this.coreRow = new ComponentRow(
@@ -129,7 +136,7 @@ export class GrimoireScene extends Phaser.Scene {
       (opt) => { this.selectedCore = opt.id as CoreId | null; this.onSelectionChanged(); },
     );
     this.coreRow.setSelectedId(this.selectedCore);
-    rowY += 82;
+    rowY += 96;
 
     const formOpts = this.buildOptions('form');
     this.formRow = new ComponentRow(
@@ -137,7 +144,7 @@ export class GrimoireScene extends Phaser.Scene {
       (opt) => { this.selectedForm = opt.id as FormId | null; this.onSelectionChanged(); },
     );
     this.formRow.setSelectedId(this.selectedForm);
-    rowY += 82;
+    rowY += 96;
 
     const suffixOpts = this.buildOptions('suffix');
     this.suffixRow = new ComponentRow(
@@ -145,6 +152,11 @@ export class GrimoireScene extends Phaser.Scene {
       (opt) => { this.selectedSuffix = opt.id as SuffixId | null; this.onSelectionChanged(); },
     );
     this.suffixRow.setSelectedId(this.selectedSuffix);
+
+    // Left panel hint
+    const hint = this.add.text(leftW / 2, ROOM_HEIGHT - 36, 'Click a component to select', uiText(11, '#666677'))
+      .setOrigin(0.5).setDepth(210);
+    applyTextShadow(hint);
   }
 
   private buildOptions(type: 'prefix' | 'core' | 'form' | 'suffix'): ComponentOption[] {
@@ -153,7 +165,7 @@ export class GrimoireScene extends Phaser.Scene {
     if (type === 'prefix' || type === 'suffix') {
       opts.push({
         id: null, displayName: 'None', description: '',
-        manaCost: 0, color: 0x555566, compatible: true,
+        manaCost: 0, color: 0x666677, compatible: true,
       });
     }
 
@@ -201,52 +213,50 @@ export class GrimoireScene extends Phaser.Scene {
   // ── Preview ─────────────────────────────────────────────────────────────
 
   private createPreview(): void {
-    this.preview = new SpellAssemblyPreview(
-      this, ROOM_WIDTH / 2 + 210, ROOM_HEIGHT / 2 - 100,
-    );
+    const rightW = Math.min(RIGHT_PANEL_W, ROOM_WIDTH * 0.3);
+    const cx = ROOM_WIDTH - rightW / 2;
+    this.preview = new SpellAssemblyPreview(this, cx, ROOM_HEIGHT / 2 - 120);
   }
 
   // ── Slot Selector ───────────────────────────────────────────────────────
 
   private createSlotSelector(): void {
-    const cx = ROOM_WIDTH / 2 + 210;
-    const sy = ROOM_HEIGHT / 2 + 90;
+    const rightW = Math.min(RIGHT_PANEL_W, ROOM_WIDTH * 0.3);
+    const cx = ROOM_WIDTH - rightW / 2;
+    const sy = ROOM_HEIGHT / 2 + 40;
 
-    this.add.text(cx, sy, 'ASSIGN TO SLOT:', {
-      fontFamily: '"Courier New", monospace', fontSize: '9px',
-      color: '#666677', fontStyle: 'bold',
-    }).setOrigin(0.5).setDepth(220);
+    const label = this.add.text(cx, sy, 'ASSIGN TO SLOT', uiText(12, '#778899', true))
+      .setOrigin(0.5).setDepth(220);
+    applyTextShadow(label);
 
-    const slotW = 80;
+    const slotW = 88;
     const gap = 8;
     const totalW = SPELL_SLOT_COUNT * slotW + (SPELL_SLOT_COUNT - 1) * gap;
     const startX = cx - totalW / 2 + slotW / 2;
 
     for (let i = 0; i < SPELL_SLOT_COUNT; i++) {
       const bx = startX + i * (slotW + gap);
-      const by = sy + 22;
+      const by = sy + 28;
 
-      const btn = this.add.rectangle(bx, by, slotW, 24, 0x161428, 0.9).setDepth(220);
+      const btn = this.add.rectangle(bx, by, slotW, 28, 0x12101c, 0.55).setDepth(220);
       btn.setStrokeStyle(
-        1, i === this.targetSlotIndex ? 0xaaaacc : 0x3a2f5a, 0.5,
+        1, i === this.targetSlotIndex ? 0xaaaacc : 0x555566, 0.6,
       );
       btn.setInteractive({ useHandCursor: true });
 
       const existingSpell = this.grimoireSystem.slots[i]?.spell;
       const slotLabel = existingSpell
-        ? existingSpell.name.substring(0, 10)
+        ? existingSpell.name.substring(0, 9)
         : `Slot ${i + 1}`;
 
-      const txt = this.add.text(bx, by, slotLabel, {
-        fontFamily: '"Courier New", monospace', fontSize: '8px',
-        color: i === this.targetSlotIndex ? '#aaaacc' : '#555566',
-      }).setOrigin(0.5).setDepth(221);
+      const txt = this.add.text(bx, by, slotLabel, uiText(11, i === this.targetSlotIndex ? '#ccccee' : '#778899'))
+        .setOrigin(0.5).setDepth(221);
+      applyTextShadow(txt);
 
       btn.on('pointerdown', () => {
         this.targetSlotIndex = i;
         this.updateSlotBtnVisuals();
 
-        // Load slot's spell into editor
         const slotSpell = this.grimoireSystem.slots[i]?.spell;
         if (slotSpell) {
           this.selectedCore = slotSpell.core.id;
@@ -275,42 +285,42 @@ export class GrimoireScene extends Phaser.Scene {
     for (let i = 0; i < this.slotBtns.length; i++) {
       const active = i === this.targetSlotIndex;
       this.slotBtns[i].setStrokeStyle(
-        active ? 2 : 1, active ? 0xaaaacc : 0x3a2f5a, active ? 0.7 : 0.4,
+        active ? 2 : 1, active ? 0xccccee : 0x555566, active ? 0.8 : 0.45,
       );
-      this.slotTexts[i].setColor(active ? '#aaaacc' : '#555566');
+      this.slotTexts[i].setColor(active ? '#ccccee' : '#778899');
     }
   }
 
   // ── History ─────────────────────────────────────────────────────────────
 
   private createHistory(): void {
-    const cx = ROOM_WIDTH / 2 + 210;
-    const hy = ROOM_HEIGHT / 2 + 150;
+    const rightW = Math.min(RIGHT_PANEL_W, ROOM_WIDTH * 0.3);
+    const cx = ROOM_WIDTH - rightW / 2;
+    const hy = ROOM_HEIGHT / 2 + 100;
 
-    this.add.text(cx, hy, 'RECENT SPELLS:', {
-      fontFamily: '"Courier New", monospace', fontSize: '9px',
-      color: '#555566', fontStyle: 'bold',
-    }).setOrigin(0.5).setDepth(220);
+    const label = this.add.text(cx, hy, 'RECENT SPELLS', uiText(12, '#667788', true))
+      .setOrigin(0.5).setDepth(220);
+    applyTextShadow(label);
 
     const history = this.grimoireSystem.history;
     for (let i = 0; i < Math.min(history.length, 5); i++) {
       const entry = history[i];
-      const ey = hy + 16 + i * 20;
+      const ey = hy + 22 + i * 26;
       const hex = '#' + entry.spell.visual.color.toString(16).padStart(6, '0');
 
-      const hBg = this.add.rectangle(cx, ey, 260, 18, 0x111122, 0.5).setDepth(220);
+      const hBg = this.add.rectangle(cx, ey, 280, 22, 0x12101c, 0.45).setDepth(220);
       hBg.setInteractive({ useHandCursor: true });
 
-      this.add.text(cx - 120, ey, entry.spell.name, {
-        fontFamily: '"Courier New", monospace', fontSize: '8px', color: hex,
-      }).setOrigin(0, 0.5).setDepth(221);
+      const nameText = this.add.text(cx - 128, ey, entry.spell.name, uiText(11, hex))
+        .setOrigin(0, 0.5).setDepth(221);
+      applyTextShadow(nameText);
 
-      this.add.text(cx + 110, ey, `${entry.spell.manaCost} MP`, {
-        fontFamily: '"Courier New", monospace', fontSize: '8px', color: '#4488aa',
-      }).setOrigin(1, 0.5).setDepth(221);
+      const mpText = this.add.text(cx + 120, ey, `${entry.spell.manaCost} MP`, uiText(11, '#66aacc'))
+        .setOrigin(1, 0.5).setDepth(221);
+      applyTextShadow(mpText);
 
-      hBg.on('pointerover', () => hBg.setFillStyle(0x222244, 0.7));
-      hBg.on('pointerout', () => hBg.setFillStyle(0x111122, 0.5));
+      hBg.on('pointerover', () => hBg.setFillStyle(0x1e1a30, 0.65));
+      hBg.on('pointerout', () => hBg.setFillStyle(0x12101c, 0.45));
       hBg.on('pointerdown', () => {
         this.selectedPrefix = entry.prefixId;
         this.selectedCore = entry.coreId;
@@ -325,33 +335,32 @@ export class GrimoireScene extends Phaser.Scene {
     }
 
     if (history.length === 0) {
-      this.add.text(cx, hy + 20, 'No spells created yet', {
-        fontFamily: '"Courier New", monospace', fontSize: '8px',
-        color: '#444455', fontStyle: 'italic',
-      }).setOrigin(0.5).setDepth(220);
+      const empty = this.add.text(cx, hy + 24, 'No spells created yet', uiText(11, '#556666'))
+        .setOrigin(0.5).setDepth(220);
+      applyTextShadow(empty);
     }
   }
 
   // ── Cast Button ─────────────────────────────────────────────────────────
 
   private createCastButton(): void {
-    const cx = ROOM_WIDTH / 2 + 210;
-    const by = ROOM_HEIGHT / 2 + 270;
+    const rightW = Math.min(RIGHT_PANEL_W, ROOM_WIDTH * 0.3);
+    const cx = ROOM_WIDTH - rightW / 2;
+    const by = ROOM_HEIGHT - 72;
 
-    this.castBtn = this.add.rectangle(cx, by, 220, 36, 0x1a1a22, 0.8).setDepth(220);
-    this.castBtn.setStrokeStyle(1, 0x444455, 0.4);
+    this.castBtn = this.add.rectangle(cx, by, 240, 40, 0x12101c, 0.55).setDepth(220);
+    this.castBtn.setStrokeStyle(1, 0x555566, 0.4);
     this.castBtn.setInteractive({ useHandCursor: true });
 
-    this.castBtnText = this.add.text(cx, by, '✦  PREPARE SPELL  ✦', {
-      fontFamily: '"Courier New", monospace', fontSize: '12px',
-      color: '#555566', fontStyle: 'bold',
-    }).setOrigin(0.5).setDepth(221);
+    this.castBtnText = this.add.text(cx, by, 'Prepare Spell', uiText(14, '#667788', true))
+      .setOrigin(0.5).setDepth(221);
+    applyTextShadow(this.castBtnText);
 
     this.castBtn.on('pointerover', () => {
-      if (this.currentSpell) this.castBtn.setFillStyle(0x223322, 0.9);
+      if (this.currentSpell) this.castBtn.setFillStyle(0x1a3020, 0.72);
     });
     this.castBtn.on('pointerout', () => {
-      this.castBtn.setFillStyle(this.currentSpell ? 0x1a2a1a : 0x1a1a22, 0.8);
+      this.castBtn.setFillStyle(this.currentSpell ? 0x142818 : 0x12101c, 0.55);
     });
     this.castBtn.on('pointerdown', () => {
       this.prepareSpell();
@@ -362,14 +371,14 @@ export class GrimoireScene extends Phaser.Scene {
 
   private setCastEnabled(enabled: boolean): void {
     if (enabled) {
-      this.castBtn.setFillStyle(0x1a2a1a, 0.9)
-        .setStrokeStyle(1, 0x44aa44, 0.5);
-      this.castBtnText.setColor('#66cc66');
+      this.castBtn.setFillStyle(0x142818, 0.65)
+        .setStrokeStyle(1, 0x55cc66, 0.6);
+      this.castBtnText.setColor('#77ee88');
       this.castBtn.setInteractive({ useHandCursor: true });
     } else {
-      this.castBtn.setFillStyle(0x1a1a22, 0.8)
-        .setStrokeStyle(1, 0x444455, 0.3);
-      this.castBtnText.setColor('#555566');
+      this.castBtn.setFillStyle(0x12101c, 0.55)
+        .setStrokeStyle(1, 0x555566, 0.35);
+      this.castBtnText.setColor('#667788');
       this.castBtn.disableInteractive();
     }
   }
@@ -377,19 +386,20 @@ export class GrimoireScene extends Phaser.Scene {
   // ── Close Button ────────────────────────────────────────────────────────
 
   private createCloseButton(): void {
-    const closeX = ROOM_WIDTH / 2 + 375;
-    const closeY = ROOM_HEIGHT / 2 - 300;
+    const rightW = Math.min(RIGHT_PANEL_W, ROOM_WIDTH * 0.3);
+    const closeX = ROOM_WIDTH - 28;
+    const closeY = 28;
 
-    const closeBtn = this.add.rectangle(closeX, closeY, 30, 30, 0x331111, 0.8).setDepth(230);
-    closeBtn.setStrokeStyle(1, 0x664444, 0.5);
+    const closeBtn = this.add.circle(closeX, closeY, 16, 0x221018, 0.65).setDepth(230);
+    closeBtn.setStrokeStyle(1, 0xaa6666, 0.55);
     closeBtn.setInteractive({ useHandCursor: true });
 
-    this.add.text(closeX, closeY, '✕', {
-      fontFamily: '"Courier New", monospace', fontSize: '16px', color: '#aa6666',
-    }).setOrigin(0.5).setDepth(231);
+    const closeText = this.add.text(closeX, closeY, '✕', uiText(14, '#cc8888', true))
+      .setOrigin(0.5).setDepth(231);
+    applyTextShadow(closeText);
 
-    closeBtn.on('pointerover', () => closeBtn.setFillStyle(0x442222, 0.9));
-    closeBtn.on('pointerout', () => closeBtn.setFillStyle(0x331111, 0.8));
+    closeBtn.on('pointerover', () => closeBtn.setFillStyle(0x331820, 0.8));
+    closeBtn.on('pointerout', () => closeBtn.setFillStyle(0x221018, 0.65));
     closeBtn.on('pointerdown', () => {
       this.requestClose();
     });
@@ -398,9 +408,12 @@ export class GrimoireScene extends Phaser.Scene {
   // ── Controls Text ───────────────────────────────────────────────────────
 
   private createControls(): void {
-    this.add.text(ROOM_WIDTH / 2, ROOM_HEIGHT / 2 + 302, 'TAB / ESC = Close     1-3 = Switch Slot', {
-      fontFamily: '"Courier New", monospace', fontSize: '9px', color: '#444455',
-    }).setOrigin(0.5).setDepth(210);
+    const controls = this.add.text(
+      ROOM_WIDTH / 2, ROOM_HEIGHT - 18,
+      'TAB / ESC — Close    ·    1–3 — Switch Slot',
+      uiText(12, '#666677'),
+    ).setOrigin(0.5).setDepth(210);
+    applyTextShadow(controls);
   }
 
   // ── Selection Logic ─────────────────────────────────────────────────────
@@ -476,15 +489,13 @@ export class GrimoireScene extends Phaser.Scene {
   // ── Close ───────────────────────────────────────────────────────────────
 
   private requestClose(): void {
-    // Clean up our UI objects
     this.preview.destroy();
     this.prefixRow.destroy();
     this.coreRow.destroy();
     this.formRow.destroy();
     this.suffixRow.destroy();
 
-    // Tell GameScene to close the grimoire (restores time, stops this scene)
-    const gameScene = this.scene.get('GameScene') as any;
+    const gameScene = this.scene.get('GameScene') as { forceCloseGrimoire: () => void };
     gameScene.forceCloseGrimoire();
   }
 }

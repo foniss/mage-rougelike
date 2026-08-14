@@ -6,12 +6,11 @@ import { GameScene } from './scenes/GameScene';
 import { HUDScene } from './scenes/HUDScene';
 import { GrimoireScene } from './scenes/GrimoireScene';
 import { DevTestScene } from './scenes/DevTestScene';
-import { ROOM_WIDTH, ROOM_HEIGHT } from './config/constants';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
-  width: ROOM_WIDTH,
-  height: ROOM_HEIGHT,
+  width: window.innerWidth,
+  height: window.innerHeight,
   parent: 'game-container',
   backgroundColor: '#0a0a0f',
   physics: {
@@ -23,7 +22,7 @@ const config: Phaser.Types.Core.GameConfig = {
   },
   scene: [BootScene, GameScene, HUDScene, GrimoireScene, DevTestScene],
   scale: {
-    mode: Phaser.Scale.FIT,
+    mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
   render: {
@@ -31,6 +30,7 @@ const config: Phaser.Types.Core.GameConfig = {
     pixelArt: false,
     roundPixels: false,
   },
+  resolution: Math.min(window.devicePixelRatio || 1, 2),
 };
 
 new Phaser.Game(config);

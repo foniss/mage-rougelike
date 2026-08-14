@@ -2,9 +2,14 @@
 
 import { BALANCE } from './balance';
 
-// --- Room ---
-export const ROOM_WIDTH = 1024;
-export const ROOM_HEIGHT = 768;
+// --- Room (fills browser window; updated by viewport.ts on resize) ---
+export let ROOM_WIDTH = window.innerWidth;
+export let ROOM_HEIGHT = window.innerHeight;
+
+export function setRoomDimensions(w: number, h: number): void {
+  ROOM_WIDTH = w;
+  ROOM_HEIGHT = h;
+}
 export const WALL_THICKNESS = 32;
 
 // --- Player ---

@@ -2,6 +2,7 @@
 // A horizontal row of clickable component buttons for one slot type.
 
 import Phaser from 'phaser';
+import { uiText, applyTextShadow } from '../config/uiStyles';
 
 export interface ComponentOption {
   id: string | null;
@@ -37,65 +38,50 @@ export class ComponentRow {
     this.onSelect = onSelect;
     this.container = scene.add.container(x, y).setDepth(220);
 
-    // Row label
     const reqMark = required ? ' *' : '';
-    scene.add.text(0, 0, label + reqMark, {
-      fontFamily: '"Courier New", monospace', fontSize: '10px',
-      color: labelColor, fontStyle: 'bold',
-    }).setOrigin(0, 0.5);
-    // Note: we add to scene directly, not container, because container is positioned
-
-    // Actually let's put label in container
-    const lbl = scene.add.text(0, -18, label + reqMark, {
-      fontFamily: '"Courier New", monospace', fontSize: '10px',
-      color: labelColor, fontStyle: 'bold',
-    });
+    const lbl = scene.add.text(0, -20, label + reqMark, uiText(13, labelColor, true));
+    applyTextShadow(lbl);
     this.container.add(lbl);
 
-    const btnW = 80;
-    const btnH = 58;
-    const gap = 6;
+    const btnW = 86;
+    const btnH = 64;
+    const gap = 8;
     let bx = 0;
 
     for (const opt of options) {
       const hex = '#' + opt.color.toString(16).padStart(6, '0');
-      const dimHex = opt.compatible ? hex : '#444455';
+      const dimHex = opt.compatible ? hex : '#666677';
 
-      const bg = scene.add.rectangle(bx + btnW / 2, btnH / 2, btnW, btnH, 0x0e0c1a, 0.85);
+      const bg = scene.add.rectangle(bx + btnW / 2, btnH / 2, btnW, btnH, 0x12101c, 0.55);
       this.container.add(bg);
 
       const border = scene.add.rectangle(bx + btnW / 2, btnH / 2, btnW, btnH);
       border.setFillStyle(0, 0);
-      border.setStrokeStyle(1, opt.compatible ? opt.color : 0x333344, opt.compatible ? 0.3 : 0.15);
+      border.setStrokeStyle(1, opt.compatible ? opt.color : 0x444455, opt.compatible ? 0.45 : 0.2);
       this.container.add(border);
 
-      // Icon circle
-      const icon = scene.add.circle(bx + btnW / 2, 16, 8,
-        opt.id ? opt.color : 0x333344, opt.compatible ? 0.5 : 0.15);
+      const icon = scene.add.circle(bx + btnW / 2, 18, 9,
+        opt.id ? opt.color : 0x444455, opt.compatible ? 0.65 : 0.2);
       this.container.add(icon);
 
-      // Name
-      const nameText = scene.add.text(bx + btnW / 2, 32, opt.displayName, {
-        fontFamily: '"Courier New", monospace', fontSize: '8px',
-        color: dimHex, fontStyle: 'bold',
-      }).setOrigin(0.5, 0);
+      const nameText = scene.add.text(bx + btnW / 2, 34, opt.displayName, uiText(11, dimHex, true))
+        .setOrigin(0.5, 0);
+      applyTextShadow(nameText);
       this.container.add(nameText);
 
-      // Mana cost
-      const manaStr = opt.id ? `+${opt.manaCost}` : '';
-      const manaText = scene.add.text(bx + btnW / 2, 46, manaStr, {
-        fontFamily: '"Courier New", monospace', fontSize: '7px', color: '#4488aa',
-      }).setOrigin(0.5, 0);
+      const manaStr = opt.id ? `+${opt.manaCost} MP` : '';
+      const manaText = scene.add.text(bx + btnW / 2, 50, manaStr, uiText(10, '#66aacc'))
+        .setOrigin(0.5, 0);
+      applyTextShadow(manaText);
       this.container.add(manaText);
 
-      // Interactive
       bg.setInteractive({ useHandCursor: opt.compatible });
       bg.on('pointerover', () => {
-        if (opt.compatible) bg.setFillStyle(0x1a1833, 0.95);
+        if (opt.compatible) bg.setFillStyle(0x1e1a30, 0.72);
       });
       bg.on('pointerout', () => {
         const selected = this.selectedId === opt.id;
-        bg.setFillStyle(selected ? 0x1a1a33 : 0x0e0c1a, selected ? 0.95 : 0.85);
+        bg.setFillStyle(selected ? 0x221e38 : 0x12101c, selected ? 0.72 : 0.55);
       });
       bg.on('pointerdown', () => {
         if (!opt.compatible && opt.id !== null) return;
@@ -123,9 +109,9 @@ export class ComponentRow {
       const compat = compatCheck(btn.option.id);
       btn.option.compatible = compat;
       const hex = '#' + btn.option.color.toString(16).padStart(6, '0');
-      btn.label.setColor(compat ? hex : '#444455');
-      btn.icon.setAlpha(compat ? 0.5 : 0.15);
-      btn.border.setStrokeStyle(1, compat ? btn.option.color : 0x333344, compat ? 0.3 : 0.15);
+      btn.label.setColor(compat ? hex : '#666677');
+      btn.icon.setAlpha(compat ? 0.65 : 0.2);
+      btn.border.setStrokeStyle(1, compat ? btn.option.color : 0x444455, compat ? 0.45 : 0.2);
       if (compat) {
         btn.bg.setInteractive({ useHandCursor: true });
       } else if (btn.option.id !== null) {
@@ -137,17 +123,16 @@ export class ComponentRow {
   private updateVisuals(): void {
     for (const btn of this.buttons) {
       const selected = this.selectedId === btn.option.id;
-      btn.bg.setFillStyle(selected ? 0x1a1a33 : 0x0e0c1a, selected ? 0.95 : 0.85);
+      btn.bg.setFillStyle(selected ? 0x221e38 : 0x12101c, selected ? 0.72 : 0.55);
       btn.border.setStrokeStyle(
         selected ? 2 : 1,
-        selected ? 0xffffff : (btn.option.compatible ? btn.option.color : 0x333344),
-        selected ? 0.6 : (btn.option.compatible ? 0.3 : 0.15),
+        selected ? 0xffffff : (btn.option.compatible ? btn.option.color : 0x444455),
+        selected ? 0.75 : (btn.option.compatible ? 0.45 : 0.2),
       );
-      btn.icon.setAlpha(selected ? 0.9 : (btn.option.compatible ? 0.5 : 0.15));
+      btn.icon.setAlpha(selected ? 1 : (btn.option.compatible ? 0.65 : 0.2));
 
-      // Selected checkmark
       if (selected && btn.option.id !== null) {
-        btn.icon.setStrokeStyle(1.5, 0xffffff, 0.6);
+        btn.icon.setStrokeStyle(1.5, 0xffffff, 0.7);
       } else {
         btn.icon.setStrokeStyle(0);
       }
