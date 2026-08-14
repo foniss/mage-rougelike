@@ -1,27 +1,36 @@
 // src/systems/GrimoireSystem.ts
 
-import { SpellDefinition } from '../config/spells';
-import { parseSpellInput, getCoreNames, getFormNames } from '../config/spellFactory';
+import { Spell, SpellBuilder } from './SpellBuilder';
+import {
+  getAllCoreIds,
+  getAllFormIds,
+  getAllPrefixIds,
+  getAllSuffixIds,
+  CORE_REGISTRY,
+  FORM_REGISTRY,
+  PREFIX_REGISTRY,
+  SUFFIX_REGISTRY,
+  CoreComponent,
+  FormComponent,
+  PrefixComponent,
+  SuffixComponent,
+} from '../config/spellComponents';
 
 export interface PrepareResult {
   success: boolean;
   message: string;
-  spell: SpellDefinition | null;
+  spell: Spell | null;
 }
 
 export class GrimoireSystem {
-  private preparedSpell: SpellDefinition | null = null;
+  private preparedSpell: Spell | null = null;
 
   constructor() {
     this.preparedSpell = null;
   }
 
-  /**
-   * Attempt to prepare a spell from raw text input.
-   * Uses the Core+Form parser.
-   */
   attemptPrepare(input: string): PrepareResult {
-    const result = parseSpellInput(input);
+    const result = SpellBuilder.parseAndBuild(input);
 
     if (!result.success) {
       return {
@@ -40,7 +49,7 @@ export class GrimoireSystem {
     };
   }
 
-  getPreparedSpell(): SpellDefinition | null {
+  getPreparedSpell(): Spell | null {
     return this.preparedSpell;
   }
 
@@ -48,11 +57,19 @@ export class GrimoireSystem {
     this.preparedSpell = null;
   }
 
-  getAvailableCores(): string[] {
-    return getCoreNames();
+  getCores(): CoreComponent[] {
+    return getAllCoreIds().map(id => CORE_REGISTRY[id]);
   }
 
-  getAvailableForms(): string[] {
-    return getFormNames();
+  getForms(): FormComponent[] {
+    return getAllFormIds().map(id => FORM_REGISTRY[id]);
+  }
+
+  getPrefixes(): PrefixComponent[] {
+    return getAllPrefixIds().map(id => PREFIX_REGISTRY[id]);
+  }
+
+  getSuffixes(): SuffixComponent[] {
+    return getAllSuffixIds().map(id => SUFFIX_REGISTRY[id]);
   }
 }

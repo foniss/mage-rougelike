@@ -10,12 +10,11 @@ import {
   MANA_REGEN_INTERVAL,
   BASIC_ATTACK_MANA_COST,
   BASIC_ATTACK_COOLDOWN,
-  SPELL_CAST_COOLDOWN,
   WALL_THICKNESS,
   ROOM_WIDTH,
   ROOM_HEIGHT,
 } from '../config/constants';
-import { SpellDefinition } from '../config/spells';
+import { Spell } from '../systems/SpellBuilder';
 
 export enum CastResult {
   SUCCESS = 'SUCCESS',
@@ -33,7 +32,7 @@ export class Player {
   public maxMana: number = PLAYER_MAX_MANA;
   public alive: boolean = true;
 
-  public preparedSpell: SpellDefinition | null = null;
+  public preparedSpell: Spell | null = null;
 
   private scene: Phaser.Scene;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -159,7 +158,7 @@ export class Player {
     if (!this.preparedSpell) return CastResult.NO_SPELL;
 
     const now = this.scene.time.now;
-    if (now - this.lastSpellCastTime < SPELL_CAST_COOLDOWN) {
+    if (now - this.lastSpellCastTime < this.preparedSpell.cooldown) {
       return CastResult.ON_COOLDOWN;
     }
 
@@ -170,7 +169,7 @@ export class Player {
     return CastResult.SUCCESS;
   }
 
-  consumePreparedSpell(): SpellDefinition {
+  consumePreparedSpell(): Spell {
     const spell = this.preparedSpell!;
     this.mana -= spell.manaCost;
     this.lastSpellCastTime = this.scene.time.now;
@@ -222,10 +221,7 @@ export class Player {
   }
 
   getAngleToPoint(x: number, y: number): number {
-    return Phaser.Math.Angle.Between(
-      this.sprite.x, this.sprite.y,
-      x, y
-    );
+    return Phaser.Math.Angle.Between(this.sprite.x, this.sprite.y, x, y);
   }
 
   destroy(): void {

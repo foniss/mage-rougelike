@@ -10,20 +10,20 @@ import {
   ROOM_WIDTH,
   ROOM_HEIGHT,
 } from '../config/constants';
-import { SpellDefinition } from '../config/spells';
+import { Spell } from '../systems/SpellBuilder';
 
 export interface ProjectileConfig {
   x: number;
   y: number;
   angle: number;
-  spell: SpellDefinition | null;
+  spell: Spell | null;
 }
 
 export class Projectile {
   public sprite: Phaser.Physics.Arcade.Sprite;
   public damage: number;
   public active: boolean = true;
-  public spell: SpellDefinition | null;
+  public spell: Spell | null;
 
   private scene: Phaser.Scene;
   private lifetime: Phaser.Time.TimerEvent;
@@ -35,20 +35,37 @@ export class Projectile {
     this.spell = config.spell;
 
     const damage = config.spell ? config.spell.damage : BASIC_ATTACK_DAMAGE;
-    const speed  = config.spell ? 450 : PROJECTILE_SPEED;
-    this.damage  = damage;
+    let speed = config.spell ? 450 : PROJECTILE_SPEED;
+    this.damage = damage;
+
+    // Apply swift prefix speed multiplier
+    if (config.spell?.prefix?.behavior.type === 'swift') {
+      speed *= config.spell.prefix.behavior.speedMultiplier;
+    }
 
     this.sprite = scene.physics.add.sprite(config.x, config.y, 'projectile');
+
+    let radius = PROJECTILE_RADIUS;
+    // Apply greater prefix size multiplier
+    if (config.spell?.prefix?.behavior.type === 'greater') {
+      radius *= config.spell.prefix.behavior.sizeMultiplier;
+    }
+
     this.sprite.setCircle(
-      PROJECTILE_RADIUS,
-      this.sprite.width / 2 - PROJECTILE_RADIUS,
-      this.sprite.height / 2 - PROJECTILE_RADIUS
+      radius,
+      this.sprite.width / 2 - radius,
+      this.sprite.height / 2 - radius
     );
+
+    if (config.spell?.prefix?.behavior.type === 'greater') {
+      this.sprite.setScale(config.spell.prefix.behavior.sizeMultiplier);
+    }
+
     this.sprite.setDepth(8);
     this.sprite.setData('owner', this);
 
     if (config.spell) {
-      this.sprite.setTint(config.spell.color);
+      this.sprite.setTint(config.spell.visual.color);
     }
 
     this.sprite.setVelocity(
@@ -62,7 +79,7 @@ export class Projectile {
     });
 
     if (config.spell) {
-      this.startTrail(config.spell.trailColor);
+      this.startTrail(config.spell.visual.trailColor);
     }
   }
 

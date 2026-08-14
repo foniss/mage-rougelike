@@ -25,7 +25,33 @@ export const PROJECTILE_LIFETIME = 2000;
 export const NOVA_RADIUS = 100;
 export const BEAM_WIDTH = 12;
 export const BEAM_RANGE = 500;
-export const SPELL_CAST_COOLDOWN = 500; // ms between any spell casts
+export const SPELL_CAST_COOLDOWN = 500;
+
+// --- Status Effect Visuals ---
+export const BURN_TICK_INTERVAL = 500;
+export const BURN_PARTICLE_INTERVAL = 150;
+export const BURN_PARTICLE_COLORS = [0xff6600, 0xff4400, 0xff8800, 0xffaa00];
+export const BURN_PARTICLE_SIZE_MIN = 2;
+export const BURN_PARTICLE_SIZE_MAX = 5;
+export const BURN_PARTICLE_LIFETIME = 400;
+export const BURN_PARTICLE_RISE = 15;
+
+export const SLOW_TINT = 0x6699ff;
+export const SLOW_RING_COLOR = 0x44ccff;
+export const SLOW_RING_ALPHA = 0.2;
+export const SLOW_CRYSTAL_COUNT = 4;
+export const SLOW_CRYSTAL_COLOR = 0x88ddff;
+
+export const CHAIN_ARC_SEGMENTS = 8;
+export const CHAIN_ARC_OFFSET = 12;
+export const CHAIN_ARC_COLOR = 0xffff00;
+export const CHAIN_ARC_GLOW_COLOR = 0xffffaa;
+export const CHAIN_ARC_WIDTH = 2;
+export const CHAIN_ARC_GLOW_WIDTH = 6;
+export const CHAIN_ARC_DURATION = 350;
+export const CHAIN_DELAY_BETWEEN = 120;
+export const CHAIN_HIT_FLASH_COLOR = 0xffff88;
+export const CHAIN_HIT_FLASH_RADIUS = 14;
 
 // --- Enemy ---
 export const ENEMY_MAX_HP = 100;
