@@ -30,7 +30,7 @@ export class Projectile {
 
   private scene: Phaser.Scene;
   private lifetime: Phaser.Time.TimerEvent;
-  private trail: Phaser.GameObjects.Circle[] = [];
+  private trail: Phaser.GameObjects.Arc[] = [];
   private trailTimer: Phaser.Time.TimerEvent | null = null;
   private damageAura: Phaser.Time.TimerEvent | null = null;
   private orbVisual: OrbVisualAttachment | null = null;
@@ -66,9 +66,6 @@ export class Projectile {
       if (config.spell.prefix?.behavior.type === 'piercing') {
         this.maxPierceTargets = config.spell.prefix.behavior.maxPierceTargets;
         this.damageRetainPercent = config.spell.prefix.behavior.damageRetainPercent;
-      }
-      if (config.spell.prefix?.behavior.type === 'swift') {
-        speed *= config.spell.prefix.behavior.speedMultiplier;
       }
     } else {
       this.damage = BASIC_ATTACK_DAMAGE;

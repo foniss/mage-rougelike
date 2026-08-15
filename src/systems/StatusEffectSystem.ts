@@ -311,9 +311,7 @@ export class StatusEffectSystem {
       slow.ring.setPosition(enemy.sprite.x, enemy.sprite.y);
 
       // Orbit crystals around enemy
-      const tweenValue = slow.crystalTween
-        ? (slow.crystalTween as Phaser.Tweens.Tween).getValue()
-        : 0;
+      const tweenValue = slow.crystalTween ? Number((slow.crystalTween as Phaser.Tweens.Tween).getValue() ?? 0) : 0;
       const baseAngle = Phaser.Math.DegToRad(tweenValue);
 
       for (let i = 0; i < slow.crystals.length; i++) {

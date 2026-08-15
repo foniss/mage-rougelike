@@ -1,5 +1,5 @@
 // Shared UI typography and glass-panel styling for crisp, readable overlays.
-
+// src/config/uiStyles.ts
 export const UI_FONT =
   '"Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif';
 
@@ -65,7 +65,7 @@ export function createGlassPanel(
   w: number,
   h: number,
   depth: number,
-  alpha = GLASS.panelAlpha,
+  alpha: number = GLASS.panelAlpha,
 ): Phaser.GameObjects.Rectangle {
   const panel = scene.add.rectangle(x, y, w, h, GLASS.panelFill, alpha).setDepth(depth);
   panel.setStrokeStyle(1, GLASS.panelStroke, GLASS.panelStrokeAlpha);

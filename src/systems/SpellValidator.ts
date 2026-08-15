@@ -26,6 +26,9 @@ import {
   getForm,
   getPrefix,
   getSuffix,
+  getAllPrefixIds,
+  getAllSuffixIds,
+  getAllFormIds,
   CORE_FORM_RESTRICTIONS,
 } from '../config/spellComponents';
 
@@ -377,7 +380,6 @@ export class SpellValidator {
     const form = getForm(formId);
     if (!form) return [];
 
-    const { getAllPrefixIds, PREFIX_REGISTRY } = require('../config/spellComponents');
     const allPrefixes: PrefixId[] = getAllPrefixIds();
 
     return allPrefixes
@@ -402,7 +404,6 @@ export class SpellValidator {
     const form = getForm(formId);
     if (!form) return [];
 
-    const { getAllSuffixIds, SUFFIX_REGISTRY } = require('../config/spellComponents');
     const allSuffixes: SuffixId[] = getAllSuffixIds();
 
     return allSuffixes
@@ -425,7 +426,6 @@ export class SpellValidator {
     const prefix = getPrefix(prefixId);
     if (!prefix) return [];
 
-    const { getAllFormIds } = require('../config/spellComponents');
     const allForms: FormId[] = getAllFormIds();
 
     return allForms

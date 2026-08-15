@@ -1,0 +1,80 @@
+// src/scenes/RunOverScene.ts
+
+import Phaser from 'phaser';
+import { DungeonState } from '../systems/dungeon/DungeonState';
+import { ROOM_WIDTH, ROOM_HEIGHT } from '../config/constants';
+import { uiText, applyTextShadow, createGlassPanel } from '../config/uiStyles';
+
+export class RunOverScene extends Phaser.Scene {
+  private dungeon!: DungeonState;
+  private victory = false;
+
+  constructor() { super({ key: 'RunOverScene' }); }
+
+  init(data: { dungeon: DungeonState; victory: boolean }): void {
+    this.dungeon = data.dungeon;
+    this.victory = data.victory;
+  }
+
+  create(): void {
+    const cx = ROOM_WIDTH / 2;
+    const cy = ROOM_HEIGHT / 2;
+    const prog = this.dungeon.progression;
+
+    this.add.rectangle(cx, cy, ROOM_WIDTH, ROOM_HEIGHT, 0x06050a, 1);
+
+    // Title
+    const title = this.victory ? 'VICTORY' : 'DEFEATED';
+    const titleColor = this.victory ? '#ffcc44' : '#ff4444';
+    const t = this.add.text(cx, cy - 120, title, uiText(36, titleColor, true)).setOrigin(0.5);
+    applyTextShadow(t);
+
+    const sub = this.victory
+      ? 'The Devil has been vanquished.'
+      : 'Your journey ends here...';
+    this.add.text(cx, cy - 80, sub, uiText(14, '#8899aa')).setOrigin(0.5);
+
+    // Stats
+    const layer = this.dungeon.currentLayerIndex + 1;
+    const room = this.dungeon.currentRoomIndex + 1;
+
+    const statsLines = [
+      `Reached: Layer ${layer}, Room ${room}`,
+      ``,
+      `Cores: ${prog.getCoreCount()}    Forms: ${prog.getFormCount()}`,
+      `Prefixes: ${prog.getPrefixCount()}    Suffixes: ${prog.getSuffixCount()}`,
+      `Sin Relics: ${prog.sinRelics.length}`,
+      ``,
+      `Gold Earned: ${prog.gold}`,
+      `Final HP: ${prog.currentHp} / ${prog.maxHp}`,
+      `Final Mana: ${prog.maxMana}`,
+    ];
+
+    this.add.text(cx, cy, statsLines.join('\n'), {
+      ...uiText(12, '#aabbcc'),
+      align: 'center',
+      lineSpacing: 4,
+    }).setOrigin(0.5, 0);
+
+    // Sin relics collected
+    if (prog.sinRelics.length > 0) {
+      const relicY = cy + 140;
+      this.add.text(cx, relicY, 'Sin Relics Collected:', uiText(10, '#ff8844', true)).setOrigin(0.5);
+      for (let i = 0; i < prog.sinRelics.length; i++) {
+        this.add.text(cx, relicY + 18 + i * 16, prog.sinRelics[i].name, uiText(10, '#ccaa88')).setOrigin(0.5);
+      }
+    }
+
+    // New Run button
+    const btn = createGlassPanel(this, cx, ROOM_HEIGHT - 70, 240, 48, 10, 0.7);
+    btn.setStrokeStyle(1, 0x55cc66, 0.5).setInteractive({ useHandCursor: true });
+    const btnTxt = this.add.text(cx, ROOM_HEIGHT - 70, 'NEW RUN', uiText(16, '#88ee88', true)).setOrigin(0.5).setDepth(11);
+    applyTextShadow(btnTxt);
+
+    btn.on('pointerover', () => btn.setFillStyle(0x1a3a1a, 0.85));
+    btn.on('pointerout', () => btn.setFillStyle(0x0c0a14, 0.7));
+    btn.on('pointerdown', () => {
+      this.scene.start('DungeonMapScene');
+    });
+  }
+}

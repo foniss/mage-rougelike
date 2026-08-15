@@ -1,5 +1,6 @@
+// src/scenes/BootScene.ts
+
 import Phaser from 'phaser';
-import { initViewport } from '../config/viewport';
 import { generateTextures } from '../utils/TextureGenerator';
 
 export class BootScene extends Phaser.Scene {
@@ -8,8 +9,10 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    initViewport(this.game);
+    // Generate textures first
     generateTextures(this);
-    this.scene.start('GameScene');
+
+    // Start the dungeon run
+    this.scene.start('DungeonMapScene');
   }
 }

@@ -23,7 +23,7 @@ export class ShopGenerator {
     items.push({
       id: 'maxhp', displayName: '+15 Max HP', description: 'Increase maximum health',
       price: SHOP_PRICES.maxHpUpgrade, type: RewardType.MAX_HP,
-      reward: { type: RewardType.MAX_HP, amount: 15, displayName: '+15 Max HP', description: 'Health upgrade' },
+      reward: { type: RewardType.MAX_HP, amount: 15, displayName: '+15 Max HP', description: 'Health upgrade', isNew: false },
       purchased: false,
     });
 
@@ -31,7 +31,7 @@ export class ShopGenerator {
     items.push({
       id: 'maxmana', displayName: '+15 Max Mana', description: 'Increase maximum mana',
       price: SHOP_PRICES.maxManaUpgrade, type: RewardType.MAX_MANA,
-      reward: { type: RewardType.MAX_MANA, amount: 15, displayName: '+15 Max Mana', description: 'Mana upgrade' },
+      reward: { type: RewardType.MAX_MANA, amount: 15, displayName: '+15 Max Mana', description: 'Mana upgrade', isNew: false },
       purchased: false,
     });
 
