@@ -8,6 +8,7 @@ import {
   CoreComponent, FormComponent, PrefixComponent, SuffixComponent,
 } from '../config/spellComponents';
 import { SPELL_SLOT_COUNT, SPELL_HISTORY_MAX } from '../config/constants';
+import { PlayerProgression } from './dungeon/PlayerProgression';
 
 export interface SpellSlot {
   spell: Spell | null;
@@ -27,59 +28,71 @@ export class GrimoireSystem {
   public activeSlotIndex: number = 0;
   public history: HistoryEntry[] = [];
 
+  /** When set, component availability is filtered by progression */
+  public progression: PlayerProgression | null = null;
+
   constructor() {
     for (let i = 0; i < SPELL_SLOT_COUNT; i++) {
       this.slots.push({ spell: null, label: `Slot ${i + 1}` });
     }
   }
 
-  /** Build and assign a spell to a slot. Returns the built spell or null. */
+  setProgression(prog: PlayerProgression): void {
+    this.progression = prog;
+  }
+
   assignToSlot(
-    slotIndex: number,
-    coreId: CoreId,
-    formId: FormId,
-    prefixId: PrefixId | null,
-    suffixId: SuffixId | null,
+    slotIndex: number, coreId: CoreId, formId: FormId,
+    prefixId: PrefixId | null, suffixId: SuffixId | null,
   ): Spell | null {
     const result = SpellBuilder.build(coreId, formId, prefixId, suffixId);
     if (!result.success || !result.spell) return null;
-
     this.slots[slotIndex] = { spell: result.spell, label: result.spell.name };
     this.addToHistory(result.spell, prefixId, coreId, formId, suffixId);
     return result.spell;
   }
 
-  /** Get the active spell slot's spell. */
   getActiveSpell(): Spell | null {
     return this.slots[this.activeSlotIndex]?.spell ?? null;
   }
 
-  /** Set active slot by index. */
   setActiveSlot(index: number): void {
-    if (index >= 0 && index < this.slots.length) {
-      this.activeSlotIndex = index;
-    }
+    if (index >= 0 && index < this.slots.length) this.activeSlotIndex = index;
   }
 
-  /** Add to spell history. */
   private addToHistory(
-    spell: Spell,
-    prefixId: PrefixId | null,
-    coreId: CoreId,
-    formId: FormId,
-    suffixId: SuffixId | null,
+    spell: Spell, prefixId: PrefixId | null, coreId: CoreId, formId: FormId, suffixId: SuffixId | null,
   ): void {
-    // Don't add duplicates at the top
     if (this.history.length > 0 && this.history[0].spell.name === spell.name) return;
-
     this.history.unshift({ spell, prefixId, coreId, formId, suffixId });
-    if (this.history.length > SPELL_HISTORY_MAX) {
-      this.history.pop();
-    }
+    if (this.history.length > SPELL_HISTORY_MAX) this.history.pop();
   }
 
-  getCores(): CoreComponent[] { return getAllCoreIds().map(id => CORE_REGISTRY[id]); }
-  getForms(): FormComponent[] { return getAllFormIds().map(id => FORM_REGISTRY[id]); }
-  getPrefixes(): PrefixComponent[] { return getAllPrefixIds().map(id => PREFIX_REGISTRY[id]); }
-  getSuffixes(): SuffixComponent[] { return getAllSuffixIds().map(id => SUFFIX_REGISTRY[id]); }
+  // ── Component Availability ──────────────────────────────────────────────
+  // GrimoireScene calls these. When progression exists, filter by unlocked.
+
+  getAvailableCoreIds(): CoreId[] {
+    if (this.progression) return this.progression.getAvailableCoreIds();
+    return getAllCoreIds();
+  }
+
+  getAvailableFormIds(): FormId[] {
+    if (this.progression) return this.progression.getAvailableFormIds();
+    return getAllFormIds();
+  }
+
+  getAvailablePrefixIds(): PrefixId[] {
+    if (this.progression) return this.progression.getAvailablePrefixIds();
+    return getAllPrefixIds();
+  }
+
+  getAvailableSuffixIds(): SuffixId[] {
+    if (this.progression) return this.progression.getAvailableSuffixIds();
+    return getAllSuffixIds();
+  }
+
+  getCores(): CoreComponent[] { return this.getAvailableCoreIds().map(id => CORE_REGISTRY[id]); }
+  getForms(): FormComponent[] { return this.getAvailableFormIds().map(id => FORM_REGISTRY[id]); }
+  getPrefixes(): PrefixComponent[] { return this.getAvailablePrefixIds().map(id => PREFIX_REGISTRY[id]); }
+  getSuffixes(): SuffixComponent[] { return this.getAvailableSuffixIds().map(id => SUFFIX_REGISTRY[id]); }
 }

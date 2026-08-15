@@ -6,6 +6,14 @@ import { GameScene } from './scenes/GameScene';
 import { HUDScene } from './scenes/HUDScene';
 import { GrimoireScene } from './scenes/GrimoireScene';
 import { DevTestScene } from './scenes/DevTestScene';
+import { DungeonMapScene } from './scenes/DungeonMapScene';
+import { ShopRestScene } from './scenes/ShopRestScene';
+import { VaultScene } from './scenes/VaultScene';
+import { ShrineScene } from './scenes/ShrineScene';
+import { SacrificeScene } from './scenes/SacrificeScene';
+import { RewardScene } from './scenes/RewardScene';
+
+// In the scene array:
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -20,7 +28,8 @@ const config: Phaser.Types.Core.GameConfig = {
       debug: false,
     },
   },
-  scene: [BootScene, GameScene, HUDScene, GrimoireScene, DevTestScene],
+scene: [BootScene, GameScene, HUDScene, GrimoireScene, DevTestScene,
+        DungeonMapScene, ShopRestScene, VaultScene, ShrineScene, SacrificeScene, RewardScene],
   scale: {
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,

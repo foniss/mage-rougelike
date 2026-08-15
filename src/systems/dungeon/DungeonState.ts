@@ -1,0 +1,90 @@
+// src/systems/dungeon/DungeonState.ts
+//
+// Runtime state of the current dungeon run.
+
+import { RoomType, SinId, TOTAL_LAYERS, ROOMS_PER_LAYER } from '../../config/dungeonConfig';
+import { PlayerProgression } from './PlayerProgression';
+
+export interface RoomChoice {
+  cardA: RoomType;
+  cardB: RoomType;
+}
+
+export interface LayerState {
+  layerIndex: number;
+  sinId: SinId | null; // null for layer 4 (Devil)
+  rooms: RoomState[];
+  completed: boolean;
+}
+
+export interface RoomState {
+  roomIndex: number;
+  type: RoomType;
+  choice?: RoomChoice; // Only for choice rooms before player decides
+  chosen: boolean;
+  completed: boolean;
+  isCurrent: boolean;
+}
+
+export class DungeonState {
+  public layers: LayerState[] = [];
+  public currentLayerIndex: number = 0;
+  public currentRoomIndex: number = 0;
+  public progression: PlayerProgression;
+  public runActive: boolean = true;
+  public runWon: boolean = false;
+
+  constructor(progression: PlayerProgression) {
+    this.progression = progression;
+  }
+
+  getCurrentLayer(): LayerState {
+    return this.layers[this.currentLayerIndex];
+  }
+
+  getCurrentRoom(): RoomState {
+    return this.getCurrentLayer().rooms[this.currentRoomIndex];
+  }
+
+  advanceRoom(): boolean {
+    const layer = this.getCurrentLayer();
+    layer.rooms[this.currentRoomIndex].completed = true;
+    layer.rooms[this.currentRoomIndex].isCurrent = false;
+
+    if (this.currentRoomIndex < ROOMS_PER_LAYER - 1) {
+      this.currentRoomIndex++;
+      layer.rooms[this.currentRoomIndex].isCurrent = true;
+      return true;
+    }
+
+    // Layer complete
+    layer.completed = true;
+    return false;
+  }
+
+  advanceLayer(): boolean {
+    if (this.currentLayerIndex < TOTAL_LAYERS - 1) {
+      this.currentLayerIndex++;
+      this.currentRoomIndex = 0;
+      this.layers[this.currentLayerIndex].rooms[0].isCurrent = true;
+      return true;
+    }
+
+    // Run complete (Devil defeated)
+    this.runWon = true;
+    this.runActive = false;
+    return false;
+  }
+
+  /** Player chose a card for a choice room */
+  resolveChoice(chosenType: RoomType): void {
+    const room = this.getCurrentRoom();
+    room.type = chosenType;
+    room.chosen = true;
+  }
+
+  endRun(won: boolean): void {
+    this.runActive = false;
+    this.runWon = won;
+  }
+}

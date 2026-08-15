@@ -9,10 +9,13 @@ import { GrimoireSystem } from '../systems/GrimoireSystem';
 import { SpellCaster } from '../systems/SpellCaster';
 import { StatusEffectSystem } from '../systems/StatusEffectSystem';
 import { Spell } from '../systems/SpellBuilder';
+import { DungeonState } from '../systems/dungeon/DungeonState';
+import { RewardGenerator } from '../systems/dungeon/RewardGenerator';
 import {
   ENEMY_RADIUS, ROOM_WIDTH, ROOM_HEIGHT, WALL_THICKNESS,
   ENEMY_COUNT, GRIMOIRE_TIME_SCALE, SPELL_SLOT_COUNT,
 } from '../config/constants';
+import { RoomType, RoomCombatConfig } from '../config/dungeonConfig';
 
 export class GameScene extends Phaser.Scene {
   private player!: Player;
@@ -21,6 +24,9 @@ export class GameScene extends Phaser.Scene {
   private combatSystem!: CombatSystem;
   public grimoireSystem!: GrimoireSystem;
   private statusEffectSystem!: StatusEffectSystem;
+  private dungeonState: DungeonState | null = null;
+  private roomType: RoomType | null = null;
+  private combatConfig: any = null;
   private gameOver = false;
   private grimoireOpen = false;
   private grimoireToggleTime = 0;
@@ -35,6 +41,12 @@ export class GameScene extends Phaser.Scene {
 
   constructor() { super({ key: 'GameScene' }); }
 
+  init(data?: { dungeon?: DungeonState; roomType?: RoomType; combatConfig?: RoomCombatConfig }): void {
+    this.dungeonState = data?.dungeon || null;
+    this.roomType = data?.roomType || null;
+    this.combatConfig = data?.combatConfig || null;
+  }
+
   create(): void {
     this.gameOver = false;
     this.grimoireOpen = false;
@@ -43,10 +55,19 @@ export class GameScene extends Phaser.Scene {
     this.projectiles = [];
 
     this.grimoireSystem = new GrimoireSystem();
+    if (this.dungeonState) {
+      this.grimoireSystem.setProgression(this.dungeonState.progression);
+    }
     this.statusEffectSystem = new StatusEffectSystem(this);
 
     this.createRoom();
     this.createPlayer();
+    if (this.dungeonState) {
+      this.player.maxHp = this.dungeonState.progression.maxHp;
+      this.player.hp = this.dungeonState.progression.currentHp;
+      this.player.maxMana = this.dungeonState.progression.maxMana;
+      this.player.mana = this.dungeonState.progression.maxMana;
+    }
     this.createEnemies();
     this.setupCombat();
     this.setupInput();
@@ -281,6 +302,9 @@ export class GameScene extends Phaser.Scene {
 
   private onPlayerDied(): void {
     this.gameOver = true;
+    if (this.dungeonState) {
+      this.dungeonState.endRun(false);
+    }
     this.gameOverText.setText('YOU DIED\n\nPress R to restart').setAlpha(1);
     for (const e of this.enemies) { if (e.alive) e.sprite.setVelocity(0, 0); }
     if (this.grimoireOpen) {
@@ -293,14 +317,31 @@ export class GameScene extends Phaser.Scene {
     const i = this.enemies.indexOf(enemy);
     if (i !== -1) this.enemies.splice(i, 1);
     if (this.enemies.length === 0 && !this.gameOver) {
-      this.time.delayedCall(2000, () => {
-        if (!this.gameOver) {
-          this.createEnemies();
-          this.combatSystem = new CombatSystem(
-            this, this.player, this.enemies, this.projectiles, this.statusEffectSystem,
-          );
-        }
-      });
+      if (this.dungeonState && this.roomType) {
+        this.dungeonState.progression.currentHp = this.player.hp;
+        const rewards = this.roomType === RoomType.NORMAL
+          ? RewardGenerator.generateNormalRewards(this.dungeonState.progression, this.dungeonState.currentLayerIndex)
+          : this.roomType === RoomType.ELITE
+            ? RewardGenerator.generateEliteRewards(this.dungeonState.progression, this.dungeonState.currentLayerIndex)
+            : RewardGenerator.generateSinBossRewards(this.dungeonState.progression);
+
+        this.time.delayedCall(1500, () => {
+          this.scene.start('RewardScene', {
+            dungeon: this.dungeonState,
+            rewards,
+            roomType: this.roomType,
+          });
+        });
+      } else {
+        this.time.delayedCall(2000, () => {
+          if (!this.gameOver) {
+            this.createEnemies();
+            this.combatSystem = new CombatSystem(
+              this, this.player, this.enemies, this.projectiles, this.statusEffectSystem,
+            );
+          }
+        });
+      }
     }
   }
 
