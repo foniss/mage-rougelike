@@ -3,7 +3,7 @@
 import Phaser from 'phaser';
 import { DungeonState } from '../systems/dungeon/DungeonState';
 import { RewardGenerator, Reward } from '../systems/dungeon/RewardGenerator';
-import { RewardType, SACRIFICE_TIER_WEIGHTS, REWARD_DISPLAY, MANA_PER_NEW_COMPONENT } from '../config/dungeonConfig';
+import { RewardType, SACRIFICE_TIER_WEIGHTS, REWARD_DISPLAY, MANA_PER_NEW_COMPONENT, GOLD_REWARDS } from '../config/dungeonConfig';
 import { ROOM_WIDTH, ROOM_HEIGHT } from '../config/constants';
 import { uiText, applyTextShadow, createGlassPanel } from '../config/uiStyles';
 import { CoreId, FormId, PrefixId, SuffixId } from '../config/spellComponents';

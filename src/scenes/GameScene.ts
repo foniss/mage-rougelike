@@ -444,8 +444,10 @@ export class GameScene extends Phaser.Scene {
             rewards = RewardGenerator.generateEliteRewards(prog, layerIdx);
             break;
           case RoomType.SIN_BOSS:
-          case RoomType.DEVIL:
             rewards = RewardGenerator.generateSinBossRewards(prog);
+            break;
+          case RoomType.DEVIL:
+            rewards = RewardGenerator.generateDevilRewards(prog);
             break;
           default:
             rewards = [];

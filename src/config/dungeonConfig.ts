@@ -180,6 +180,7 @@ export interface GoldRewardConfig {
   elite: { min: number; max: number };
   sinBoss: { min: number; max: number };
   devil: { min: number; max: number };
+  sacrifice: { min: number; max: number };
 }
 
 export const GOLD_REWARDS: GoldRewardConfig = {
@@ -187,6 +188,7 @@ export const GOLD_REWARDS: GoldRewardConfig = {
   elite: { min: 30, max: 55 },
   sinBoss: { min: 50, max: 80 },
   devil: { min: 0, max: 0 },
+  sacrifice: { min: 10, max: 20 },
 };
 
 // ── Sacrifice Tier Chances ────────────────────────────────────────────────

@@ -83,6 +83,16 @@ export class RewardGenerator {
     return rewards;
   }
 
+  static generateDevilRewards(prog: PlayerProgression): Reward[] {
+    const rewards: Reward[] = [];
+    // Devil is the final fight of the run — gold has nowhere left to be spent,
+    // so this intentionally uses its own (zero) tier rather than the Sin Boss tier.
+    if (GOLD_REWARDS.devil.max > 0) {
+      rewards.push(RewardGenerator.goldReward(GOLD_REWARDS.devil.min, GOLD_REWARDS.devil.max));
+    }
+    return rewards;
+  }
+
   // ── Vault ─────────────────────────────────────────────────────────────
 
   static generateVaultRewards(category: VaultCategory, prog: PlayerProgression): Reward[] {

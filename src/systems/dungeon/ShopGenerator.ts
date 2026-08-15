@@ -35,13 +35,22 @@ export class ShopGenerator {
       purchased: false,
     });
 
-    // Random component
-    const comp = RewardGenerator.generateNormalRewards(progression, layerIndex)
-      .find(r => r.type !== RewardType.GOLD);
-    if (comp) {
+    // Random component: one Core/Form slot, one Prefix/Suffix slot.
+    // (Previously the shop only ever offered Core/Form via generateNormalRewards,
+    // meaning Prefixes/Suffixes could never be bought — this adds the missing slot.)
+    const foundation = RewardGenerator.balancedCoreOrForm(progression);
+    if (foundation) {
       items.push({
-        id: 'component', displayName: comp.displayName, description: comp.description,
-        price: SHOP_PRICES.component, type: comp.type, reward: comp, purchased: false,
+        id: 'component-foundation', displayName: foundation.displayName, description: foundation.description,
+        price: SHOP_PRICES.component, type: foundation.type, reward: foundation, purchased: false,
+      });
+    }
+
+    const arsenal = RewardGenerator.balancedPrefixOrSuffix(progression);
+    if (arsenal) {
+      items.push({
+        id: 'component-arsenal', displayName: arsenal.displayName, description: arsenal.description,
+        price: SHOP_PRICES.component, type: arsenal.type, reward: arsenal, purchased: false,
       });
     }
 

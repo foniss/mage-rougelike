@@ -71,3 +71,76 @@ export function createGlassPanel(
   panel.setStrokeStyle(1, GLASS.panelStroke, GLASS.panelStrokeAlpha);
   return panel;
 }
+
+/**
+ * A glass panel with a soft color-tinted glow behind it (a larger, low-alpha
+ * rectangle) — used for the "premium" surfaces: reward cards, room cards,
+ * vault categories. Returns { glow, panel } so callers can restyle either
+ * layer on hover/interaction.
+ */
+export function createGlowPanel(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  depth: number,
+  accentColor: number,
+  alpha: number = GLASS.panelAlpha,
+): { glow: Phaser.GameObjects.Rectangle; panel: Phaser.GameObjects.Rectangle } {
+  const glow = scene.add.rectangle(x, y, w + 10, h + 10, accentColor, 0.08).setDepth(depth - 1);
+  const panel = scene.add.rectangle(x, y, w, h, GLASS.panelFill, alpha).setDepth(depth);
+  panel.setStrokeStyle(1, accentColor, 0.4);
+  return { glow, panel };
+}
+
+/** Fade + rise entrance, staggered by index for lists of cards/rows. */
+export function fadeInUp(
+  scene: Phaser.Scene,
+  target: Phaser.GameObjects.GameObject & { y: number; alpha?: number },
+  index = 0,
+  distance = 14,
+  baseDelay = 60,
+): void {
+  const obj: any = target;
+  const finalY = obj.y;
+  obj.y = finalY + distance;
+  obj.alpha = 0;
+  scene.tweens.add({
+    targets: obj,
+    y: finalY,
+    alpha: 1,
+    duration: 320,
+    delay: index * baseDelay,
+    ease: 'Cubic.easeOut',
+  });
+}
+
+/** Gentle looping pulse — used for "current" progress dots and call-to-action buttons. */
+export function pulseGlow(
+  scene: Phaser.Scene,
+  target: Phaser.GameObjects.GameObject,
+): Phaser.Tweens.Tween {
+  return scene.tweens.add({
+    targets: target,
+    scale: 1.12,
+    duration: 700,
+    yoyo: true,
+    repeat: -1,
+    ease: 'Sine.easeInOut',
+  });
+}
+
+/** Smoothly animates a bar-fill rectangle's width to a new value. */
+export function tweenBarWidth(
+  scene: Phaser.Scene,
+  bar: Phaser.GameObjects.Rectangle,
+  toWidth: number,
+  duration = 350,
+): void {
+  scene.tweens.add({ targets: bar, width: Math.max(0, toWidth), duration, ease: 'Cubic.easeOut' });
+}
+
+export function hexColor(color: number): string {
+  return '#' + color.toString(16).padStart(6, '0');
+}
