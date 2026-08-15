@@ -1,10 +1,9 @@
 // src/systems/dungeon/PlayerProgression.ts
-//
-// Single source of truth for what the player has during a run.
 
 import {
   CoreId, FormId, PrefixId, SuffixId,
-  getAllCoreIds, getAllFormIds,
+  getAllCoreIds, getAllFormIds, getAllPrefixIds, getAllSuffixIds,
+  CORE_REGISTRY, FORM_REGISTRY, PREFIX_REGISTRY, SUFFIX_REGISTRY,
 } from '../../config/spellComponents';
 import { SinId, MANA_PER_NEW_COMPONENT, STARTING_GOLD, REST_HEAL_PERCENT } from '../../config/dungeonConfig';
 import { BALANCE } from '../../config/balance';
@@ -16,22 +15,18 @@ export interface SinRelic {
 }
 
 export class PlayerProgression {
-  // Components the player has unlocked THIS run
   public unlockedCores: Set<CoreId> = new Set();
   public unlockedForms: Set<FormId> = new Set();
   public unlockedPrefixes: Set<PrefixId> = new Set();
   public unlockedSuffixes: Set<SuffixId> = new Set();
   public sinRelics: SinRelic[] = [];
 
-  // Resources
   public gold: number = STARTING_GOLD;
 
-  // Stats (can be upgraded during run)
   public maxHp: number = BALANCE.player.maxHp;
   public currentHp: number = BALANCE.player.maxHp;
   public maxMana: number = BALANCE.player.maxMana;
 
-  // Defeated sins (removed from pool)
   public defeatedSins: Set<SinId> = new Set();
 
   constructor() {
@@ -39,7 +34,6 @@ export class PlayerProgression {
   }
 
   private initStartingComponents(): void {
-    // Start with 1 random core and 1 random form
     const allCores = getAllCoreIds();
     const allForms = getAllFormIds();
     const startCore = allCores[Math.floor(Math.random() * allCores.length)];
@@ -48,8 +42,9 @@ export class PlayerProgression {
     this.unlockedForms.add(startForm);
   }
 
-  // ── Component Acquisition ──────────────────────────────────────────────
+  // ── Component Acquisition (with +25 Mana for Core/Form) ────────────────
 
+  /** Returns true if the component was NEW (not a duplicate). */
   addCore(id: CoreId): boolean {
     if (this.unlockedCores.has(id)) return false;
     this.unlockedCores.add(id);
@@ -83,7 +78,7 @@ export class PlayerProgression {
   // ── Component Removal (for Sacrifice) ──────────────────────────────────
 
   removeCore(id: CoreId): boolean {
-    if (this.unlockedCores.size <= 1) return false; // Can't remove last
+    if (this.unlockedCores.size <= 1) return false;
     return this.unlockedCores.delete(id);
   }
 
@@ -100,7 +95,7 @@ export class PlayerProgression {
     return this.unlockedSuffixes.delete(id);
   }
 
-  // ── Queries ────────────────────────────────────────────────────────────
+  // ── Ownership Queries ──────────────────────────────────────────────────
 
   getAvailableCoreIds(): CoreId[] { return [...this.unlockedCores]; }
   getAvailableFormIds(): FormId[] { return [...this.unlockedForms]; }
@@ -112,17 +107,65 @@ export class PlayerProgression {
   hasPrefix(id: PrefixId): boolean { return this.unlockedPrefixes.has(id); }
   hasSuffix(id: SuffixId): boolean { return this.unlockedSuffixes.has(id); }
 
-  /** Get all removable components for sacrifice */
-  getSacrificeCandidates(): { type: string; id: string; name: string }[] {
-    const candidates: { type: string; id: string; name: string }[] = [];
+  // ── Unowned Queries (for reward generation) ────────────────────────────
+
+  getUnownedCores(): CoreId[] {
+    return getAllCoreIds().filter(id => !this.unlockedCores.has(id));
+  }
+
+  getUnownedForms(): FormId[] {
+    return getAllFormIds().filter(id => !this.unlockedForms.has(id));
+  }
+
+  getUnownedPrefixes(): PrefixId[] {
+    return getAllPrefixIds().filter(id => !this.unlockedPrefixes.has(id));
+  }
+
+  getUnownedSuffixes(): SuffixId[] {
+    return getAllSuffixIds().filter(id => !this.unlockedSuffixes.has(id));
+  }
+
+  /** Returns true if there are any unowned cores OR forms */
+  hasUnownedCoreOrForm(): boolean {
+    return this.getUnownedCores().length > 0 || this.getUnownedForms().length > 0;
+  }
+
+  /** Returns true if there are any unowned prefixes OR suffixes */
+  hasUnownedPrefixOrSuffix(): boolean {
+    return this.getUnownedPrefixes().length > 0 || this.getUnownedSuffixes().length > 0;
+  }
+
+  // ── Count Queries (for balance ratios) ─────────────────────────────────
+
+  getCoreCount(): number { return this.unlockedCores.size; }
+  getFormCount(): number { return this.unlockedForms.size; }
+  getPrefixCount(): number { return this.unlockedPrefixes.size; }
+  getSuffixCount(): number { return this.unlockedSuffixes.size; }
+
+  // ── Sacrifice Candidates ───────────────────────────────────────────────
+
+  getSacrificeCandidates(): { type: 'core' | 'form' | 'prefix' | 'suffix'; id: string; name: string }[] {
+    const candidates: { type: 'core' | 'form' | 'prefix' | 'suffix'; id: string; name: string }[] = [];
     if (this.unlockedCores.size > 1) {
-      for (const id of this.unlockedCores) candidates.push({ type: 'core', id, name: id });
+      for (const id of this.unlockedCores) {
+        const reg = CORE_REGISTRY[id];
+        candidates.push({ type: 'core', id, name: reg?.displayName || id });
+      }
     }
     if (this.unlockedForms.size > 1) {
-      for (const id of this.unlockedForms) candidates.push({ type: 'form', id, name: id });
+      for (const id of this.unlockedForms) {
+        const reg = FORM_REGISTRY[id];
+        candidates.push({ type: 'form', id, name: reg?.displayName || id });
+      }
     }
-    for (const id of this.unlockedPrefixes) candidates.push({ type: 'prefix', id, name: id });
-    for (const id of this.unlockedSuffixes) candidates.push({ type: 'suffix', id, name: id });
+    for (const id of this.unlockedPrefixes) {
+      const reg = PREFIX_REGISTRY[id];
+      candidates.push({ type: 'prefix', id, name: reg?.displayName || id });
+    }
+    for (const id of this.unlockedSuffixes) {
+      const reg = SUFFIX_REGISTRY[id];
+      candidates.push({ type: 'suffix', id, name: reg?.displayName || id });
+    }
     return candidates;
   }
 

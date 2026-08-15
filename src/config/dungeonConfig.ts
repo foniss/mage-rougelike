@@ -320,3 +320,68 @@ export const SIN_DEFINITIONS: Record<SinId, SinDefinition> = {
 export function getAllSinIds(): SinId[] {
   return Object.keys(SIN_DEFINITIONS) as SinId[];
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  COMPONENT BALANCE RATIOS
+//
+//  When rewarding Core OR Form (or Prefix OR Suffix), the system
+//  compares how many the player owns in each category and biases
+//  toward the category with fewer.
+//
+//  Key = absolute difference in count between the two categories.
+//  Value = probability for the category with MORE items.
+//  The category with FEWER gets (1 - value).
+//
+//  Example: player has 3 Cores and 1 Form → difference = 2
+//  → moreProbability = 0.05 → 5% Core, 95% Form
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface BalanceRatioEntry {
+  difference: number;
+  moreProbability: number;
+}
+
+/**
+ * Probability table for Core/Form and Prefix/Suffix balancing.
+ * Sorted by ascending difference. The last entry applies to all
+ * differences >= its value.
+ */
+export const COMPONENT_BALANCE_RATIOS: BalanceRatioEntry[] = [
+  { difference: 0, moreProbability: 0.50 },  // Equal: 50/50
+  { difference: 1, moreProbability: 0.30 },  // 1 more: 30/70
+  { difference: 2, moreProbability: 0.05 },  // 2 more: 5/95
+  { difference: 3, moreProbability: 0.00 },  // 3+ more: 0/100
+];
+
+/**
+ * Look up the probability for the category that has MORE items.
+ */
+export function getBalancedProbability(difference: number): number {
+  // Find the matching or highest applicable entry
+  let result = COMPONENT_BALANCE_RATIOS[0].moreProbability;
+  for (const entry of COMPONENT_BALANCE_RATIOS) {
+    if (difference >= entry.difference) {
+      result = entry.moreProbability;
+    }
+  }
+  return result;
+}
+
+// ── Reward Display Names ──────────────────────────────────────────────────
+
+export const REWARD_DISPLAY: Record<RewardType, { label: string; color: number }> = {
+  [RewardType.GOLD]: { label: 'Gold', color: 0xffcc44 },
+  [RewardType.CORE]: { label: 'Core', color: 0xff8844 },
+  [RewardType.FORM]: { label: 'Form', color: 0x8888ff },
+  [RewardType.PREFIX]: { label: 'Prefix', color: 0x88cc88 },
+  [RewardType.SUFFIX]: { label: 'Suffix', color: 0xccaa66 },
+  [RewardType.SIN_RELIC]: { label: 'Sin Relic', color: 0xff4466 },
+  [RewardType.MAX_HP]: { label: 'Max HP', color: 0x44cc66 },
+  [RewardType.MAX_MANA]: { label: 'Max Mana', color: 0x4488ff },
+  [RewardType.CONSUMABLE]: { label: 'Consumable', color: 0xaa88cc },
+};
+
+// ── Max Reroll Attempts ───────────────────────────────────────────────────
+
+/** When a reward rolls a duplicate, reroll up to this many times */
+export const MAX_REWARD_REROLL = 20;
