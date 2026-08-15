@@ -7,6 +7,11 @@ import {
   ENEMY_RADIUS,
 } from '../config/constants';
 
+/** Identifies the cast responsible for damage without coupling enemies to spell systems. */
+export interface DamageSource {
+  castId: number;
+}
+
 export class Enemy {
   public sprite: Phaser.Physics.Arcade.Sprite;
   public hp: number = ENEMY_MAX_HP;
@@ -140,7 +145,7 @@ export class Enemy {
     });
   }
 
-  takeDamage(amount: number): void {
+  takeDamage(amount: number, source?: DamageSource): void {
     if (!this.alive) return;
     this.hp -= amount;
     this.hpBarBg.setAlpha(0.8);
@@ -153,13 +158,13 @@ export class Enemy {
 
     if (this.hp <= 0) {
       this.hp = 0;
-      this.die();
+      this.die(source);
     }
   }
 
-  private die(): void {
+  private die(source?: DamageSource): void {
     this.alive = false;
-    this.scene.events.emit('enemy-died', this);
+    this.scene.events.emit('enemy-died', this, source);
     this.scene.tweens.add({
       targets: [this.sprite, this.hpBarBg, this.hpBarFill],
       alpha: 0, scaleX: 0.2, scaleY: 0.2,

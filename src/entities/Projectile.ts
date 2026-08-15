@@ -6,6 +6,8 @@ import {
   BASIC_ATTACK_DAMAGE, WALL_THICKNESS, ROOM_WIDTH, ROOM_HEIGHT,
 } from '../config/constants';
 import { Spell } from '../systems/SpellBuilder';
+import { Player } from './Player';
+import { Enemy } from './Enemy';
 import { OrbVisual } from '../config/spellComponents';
 import { OrbVisuals, OrbVisualAttachment } from '../visuals/OrbVisuals';
 import { PrefixVisuals } from '../visuals/PrefixVisuals';
@@ -15,6 +17,8 @@ export interface ProjectileConfig {
   y: number;
   angle: number;
   spell: Spell | null;
+  castId?: number;
+  returnTarget?: Player;
 }
 
 export class Projectile {
@@ -22,10 +26,11 @@ export class Projectile {
   public damage: number;
   public active: boolean = true;
   public spell: Spell | null;
+  public castId: number | null;
   public pierceCount: number = 0;
   public maxPierceTargets: number = 0;
   public damageRetainPercent: number = 1;
-  public hitEnemies: Set<string> = new Set();
+  public hitEnemies: Set<Enemy> = new Set();
   public isReturning: boolean = false;
 
   private scene: Phaser.Scene;
@@ -37,10 +42,14 @@ export class Projectile {
   private isOrb: boolean = false;
   private greaterAura: Phaser.GameObjects.Arc | null = null;
   private expandingTrailTimer: Phaser.Time.TimerEvent | null = null;
+  private behaviorTimers: Phaser.Time.TimerEvent[] = [];
+  private returnTarget: Player | null;
 
   constructor(scene: Phaser.Scene, config: ProjectileConfig) {
     this.scene = scene;
     this.spell = config.spell;
+    this.castId = config.castId ?? null;
+    this.returnTarget = config.returnTarget ?? null;
 
     let speed = PROJECTILE_SPEED;
     let radius = PROJECTILE_RADIUS;
@@ -163,7 +172,7 @@ export class Projectile {
     const hb = spell.prefix.behavior;
     let indicatorCounter = 0;
 
-    this.scene.time.addEvent({
+    const homingTimer = this.scene.time.addEvent({
       delay: 50, loop: true,
       callback: () => {
         if (!this.active || !this.sprite.active) return;
@@ -202,6 +211,7 @@ export class Projectile {
         }
       },
     });
+    this.behaviorTimers.push(homingTimer);
   }
 
   // ── Splitting with visual feedback ──────────────────────────────────────
@@ -210,7 +220,7 @@ export class Projectile {
     if (spell.prefix?.behavior.type !== 'splitting') return;
     const sb = spell.prefix.behavior;
 
-    this.scene.time.delayedCall(lifetime * sb.splitAtPercent, () => {
+    const splitTimer = this.scene.time.delayedCall(lifetime * sb.splitAtPercent, () => {
       if (!this.active) return;
       const ba = Math.atan2(this.sprite.body!.velocity.y, this.sprite.body!.velocity.x);
       const spread = Phaser.Math.DegToRad(sb.splitAngleSpread);
@@ -231,11 +241,13 @@ export class Projectile {
         };
         const p = new Projectile(this.scene, {
           x: this.sprite.x, y: this.sprite.y, angle: sa, spell: ss,
+          castId: this.castId ?? undefined, returnTarget: this.returnTarget ?? undefined,
         });
         this.scene.events.emit('projectile-created', p);
       }
       this.destroy();
     });
+    this.behaviorTimers.push(splitTimer);
   }
 
   // ── Returning with visual feedback ──────────────────────────────────────
@@ -244,10 +256,13 @@ export class Projectile {
     if (spell.prefix?.behavior.type !== 'returning') return;
     const rb = spell.prefix.behavior;
 
-    this.scene.time.delayedCall(lifetime * 0.5, () => {
+    const returnTimer = this.scene.time.delayedCall(lifetime * 0.5, () => {
       if (!this.active) return;
       this.isReturning = true;
-      const ra = Phaser.Math.Angle.Between(this.sprite.x, this.sprite.y, sx, sy);
+      this.hitEnemies.clear();
+      const targetX = this.returnTarget?.sprite.active ? this.returnTarget.sprite.x : sx;
+      const targetY = this.returnTarget?.sprite.active ? this.returnTarget.sprite.y : sy;
+      const ra = Phaser.Math.Angle.Between(this.sprite.x, this.sprite.y, targetX, targetY);
       this.sprite.setVelocity(Math.cos(ra) * rb.returnSpeed, Math.sin(ra) * rb.returnSpeed);
       this.damage = Math.round(this.damage * rb.returnDamagePercent);
 
@@ -257,6 +272,7 @@ export class Projectile {
         spell.visual, ra,
       );
     });
+    this.behaviorTimers.push(returnTimer);
   }
 
   // ── Piercing trail ──────────────────────────────────────────────────────
@@ -322,6 +338,17 @@ export class Projectile {
       }
     }
 
+    if (this.isReturning && this.returnTarget?.sprite.active) {
+      const distanceToCaster = Phaser.Math.Distance.Between(
+        this.sprite.x, this.sprite.y,
+        this.returnTarget.sprite.x, this.returnTarget.sprite.y,
+      );
+      if (distanceToCaster <= 18) {
+        this.destroy();
+        return;
+      }
+    }
+
     if (
       this.sprite.x < WALL_THICKNESS || this.sprite.x > ROOM_WIDTH - WALL_THICKNESS ||
       this.sprite.y < WALL_THICKNESS || this.sprite.y > ROOM_HEIGHT - WALL_THICKNESS
@@ -337,6 +364,9 @@ export class Projectile {
     if (this.trailTimer) this.trailTimer.destroy();
     if (this.damageAura) this.damageAura.destroy();
     if (this.expandingTrailTimer) this.expandingTrailTimer.destroy();
+    for (const timer of this.behaviorTimers) timer.destroy();
+    this.behaviorTimers = [];
+    this.lifetime.destroy();
     for (const dot of this.trail) dot.destroy();
     this.trail = [];
 
@@ -346,7 +376,7 @@ export class Projectile {
     if (this.sprite.active) {
       this.scene.tweens.add({
         targets: this.sprite, alpha: 0, scaleX: 2, scaleY: 2, duration: 100,
-        onComplete: () => { this.lifetime.destroy(); this.sprite.destroy(); },
+        onComplete: () => { this.sprite.destroy(); },
       });
     }
   }

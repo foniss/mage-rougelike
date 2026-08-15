@@ -4,6 +4,7 @@
 
 import { RoomType, SinId, TOTAL_LAYERS, ROOMS_PER_LAYER } from '../../config/dungeonConfig';
 import { PlayerProgression } from './PlayerProgression';
+import type { ShopItem } from './ShopGenerator';
 
 export interface RoomChoice {
   cardA: RoomType;
@@ -24,6 +25,11 @@ export interface RoomState {
   chosen: boolean;
   completed: boolean;
   isCurrent: boolean;
+  /** Lazily created, room-local state for the Shop + Rest scene. */
+  shopState?: {
+    items: ShopItem[];
+    hasRested: boolean;
+  };
 }
 
 export class DungeonState {

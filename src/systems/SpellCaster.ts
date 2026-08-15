@@ -17,7 +17,6 @@ import {
   ReapingBehavior,
   DetonationBehavior,
 } from '../config/spellComponents';
-import { ENEMY_RADIUS } from '../config/constants';
 
 export interface CastContext {
   scene: Phaser.Scene;
@@ -28,12 +27,16 @@ export interface CastContext {
   enemies: Enemy[];
   projectiles: Projectile[];
   statusEffects: StatusEffectSystem;
+  /** Unique cast identity used to attribute delayed damage and kill effects. */
+  castId?: number;
 }
 
 export class SpellCaster {
+  private static nextCastId = 1;
 
   static cast(ctx: CastContext): void {
     const { scene, spell, player, enemies, projectiles, statusEffects } = ctx;
+    const castId = ctx.castId ?? SpellCaster.nextCastId++;
 
     // Greater cast effect
     if (spell.prefix?.behavior.type === 'greater') {
@@ -47,15 +50,18 @@ export class SpellCaster {
       scene, spell, player,
       targetX: ctx.targetX, targetY: ctx.targetY,
       enemies, projectiles, statusEffects,
+      castId,
+      onHit: (enemy) => SpellCaster.applyOnHit({ ...ctx, castId }, enemy),
     };
+
+    // Start kill attribution before executing an immediate form (Blade/Nova),
+    // so a first-hit kill is still credited to this cast.
+    if (spell.suffix && ['devouring', 'reaping', 'detonation'].includes(spell.suffix.behavior.type)) {
+      SpellCaster.setupSuffixWatchers({ ...ctx, castId });
+    }
 
     // Execute the form
     FormExecutor.execute(formCtx);
-
-    // Handle suffix on-kill effects
-    if (spell.suffix) {
-      SpellCaster.setupSuffixWatchers(ctx);
-    }
 
     // Handle echo suffix
     if (spell.suffix?.behavior.type === 'echoes' && !spell.isEcho) {
@@ -78,46 +84,6 @@ export class SpellCaster {
       });
     }
 
-    // Handle binding suffix
-    if (spell.suffix?.behavior.type === 'binding') {
-      const bindBehavior = spell.suffix.behavior as BindingBehavior;
-      for (const enemy of enemies) {
-        if (!enemy.alive) continue;
-        const dist = Phaser.Math.Distance.Between(
-          ctx.targetX, ctx.targetY,
-          enemy.sprite.x, enemy.sprite.y
-        );
-        if (dist <= bindBehavior.bindRadius + ENEMY_RADIUS + 20) {
-          enemy.isBound = true;
-          enemy.bindAnchorX = enemy.sprite.x;
-          enemy.bindAnchorY = enemy.sprite.y;
-          enemy.bindRadius = bindBehavior.bindRadius;
-
-          // Create binding visual
-          const bindVisual = SuffixVisuals.createBindingVisual(
-            scene, enemy.sprite.x, enemy.sprite.y,
-            bindBehavior.bindRadius, bindBehavior.bindDuration,
-            spell.visual,
-          );
-
-          // Update binding visual to follow enemy
-          const updateTimer = scene.time.addEvent({
-            delay: 16, loop: true,
-            callback: () => {
-              if (enemy.alive && enemy.isBound) {
-                bindVisual.update(enemy.sprite.x, enemy.sprite.y);
-              }
-            },
-          });
-
-          scene.time.delayedCall(bindBehavior.bindDuration * 1000, () => {
-            enemy.isBound = false;
-            updateTimer.destroy();
-            bindVisual.destroy();
-          });
-        }
-      }
-    }
   }
 
   /**
@@ -130,7 +96,8 @@ export class SpellCaster {
     const behavior = spell.suffix.behavior;
     const watchDuration = 3000;
 
-    const onEnemyDied = (enemy: Enemy) => {
+    const onEnemyDied = (enemy: Enemy, source?: { castId: number }) => {
+      if (source?.castId !== ctx.castId) return;
       if (behavior.type === 'devouring') {
         const devBehavior = behavior as DevouringBehavior;
         if (ctx.player.alive) {
@@ -181,10 +148,10 @@ export class SpellCaster {
             const target = closest;
             scene.time.delayedCall(250, () => {
               if (target.alive) {
-                target.takeDamage(seekDmg);
+                target.takeDamage(seekDmg, { castId: ctx.castId! });
                 const eCtx: EffectContext = {
                   scene, spell, sourceX: fromX, sourceY: fromY,
-                  enemies, statusEffects,
+                  enemies, statusEffects, castId: ctx.castId!,
                 };
                 CoreEffectExecutor.apply(eCtx, target);
               }
@@ -209,7 +176,7 @@ export class SpellCaster {
           if (!e.alive) continue;
           const d = Phaser.Math.Distance.Between(ex, ey, e.sprite.x, e.sprite.y);
           if (d <= detBehavior.explosionRadius) {
-            e.takeDamage(detDmg);
+            e.takeDamage(detDmg, detBehavior.canChainDetonate ? { castId: ctx.castId! } : undefined);
           }
         }
       }
@@ -232,7 +199,47 @@ export class SpellCaster {
       sourceY: ctx.player.sprite.y,
       enemies: ctx.enemies,
       statusEffects: ctx.statusEffects,
+      castId: ctx.castId ?? 0,
     };
     CoreEffectExecutor.apply(eCtx, enemy);
+
+    if (ctx.spell.suffix?.behavior.type === 'binding') {
+      SpellCaster.applyBinding(ctx, enemy, ctx.spell.suffix.behavior as BindingBehavior);
+    }
+  }
+
+  private static applyBinding(ctx: CastContext, enemy: Enemy, behavior: BindingBehavior): void {
+    const existing = enemy.sprite.getData('bindingEffect') as {
+      expireTimer: Phaser.Time.TimerEvent;
+      updateTimer: Phaser.Time.TimerEvent;
+      visual: ReturnType<typeof SuffixVisuals.createBindingVisual>;
+    } | undefined;
+    if (existing) {
+      existing.expireTimer.destroy();
+      existing.updateTimer.destroy();
+      existing.visual.destroy();
+    }
+
+    enemy.isBound = true;
+    enemy.bindAnchorX = enemy.sprite.x;
+    enemy.bindAnchorY = enemy.sprite.y;
+    enemy.bindRadius = behavior.bindRadius;
+    const visual = SuffixVisuals.createBindingVisual(
+      ctx.scene, enemy.sprite.x, enemy.sprite.y,
+      behavior.bindRadius, behavior.bindDuration, ctx.spell.visual,
+    );
+    const updateTimer = ctx.scene.time.addEvent({
+      delay: 16, loop: true,
+      callback: () => {
+        if (enemy.alive && enemy.isBound) visual.update(enemy.sprite.x, enemy.sprite.y);
+      },
+    });
+    const expireTimer = ctx.scene.time.delayedCall(behavior.bindDuration * 1000, () => {
+      enemy.isBound = false;
+      updateTimer.destroy();
+      visual.destroy();
+      enemy.sprite.data?.remove('bindingEffect');
+    });
+    enemy.sprite.setData('bindingEffect', { expireTimer, updateTimer, visual });
   }
 }

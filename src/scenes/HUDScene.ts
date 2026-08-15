@@ -23,9 +23,13 @@ export class HUDScene extends Phaser.Scene {
 
   private lastHpWidth = -1;
   private lastManaWidth = -1;
+  private gameScene: Phaser.Scene | null = null;
 
   private readonly BAR_W = 168;
   private readonly PAD = 14;
+  private readonly onSetPlayer = (player: Player): void => { this.player = player; };
+  private readonly onSetGrimoire = (grimoire: GrimoireSystem): void => { this.grimoireSystem = grimoire; };
+  private readonly onGameHudUpdate = (): void => { this.updateHud(); };
 
   constructor() { super({ key: 'HUDScene' }); }
 
@@ -38,11 +42,12 @@ export class HUDScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.events.on('set-player', (p: Player) => { this.player = p; });
-    this.events.on('set-grimoire', (g: GrimoireSystem) => { this.grimoireSystem = g; });
+    this.events.on('set-player', this.onSetPlayer, this);
+    this.events.on('set-grimoire', this.onSetGrimoire, this);
 
-    const gs = this.scene.get('GameScene');
-    gs.events.on('update-hud', this.updateHud, this);
+    this.gameScene = this.scene.get('GameScene');
+    this.gameScene.events.on('update-hud', this.onGameHudUpdate, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
 
     this.buildResourcePanel();
     if (this.dungeonState) this.buildDungeonStatusPanel();
@@ -144,5 +149,12 @@ export class HUDScene extends Phaser.Scene {
     if (this.grimoireSystem) {
       this.spellSlotBar.update(this.grimoireSystem.slots, this.grimoireSystem.activeSlotIndex);
     }
+  }
+
+  private handleShutdown(): void {
+    this.events.off('set-player', this.onSetPlayer, this);
+    this.events.off('set-grimoire', this.onSetGrimoire, this);
+    this.gameScene?.events.off('update-hud', this.onGameHudUpdate, this);
+    this.gameScene = null;
   }
 }

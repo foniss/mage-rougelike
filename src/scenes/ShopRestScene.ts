@@ -14,7 +14,18 @@ export class ShopRestScene extends Phaser.Scene {
   private hasRested = false;
 
   constructor() { super({ key: 'ShopRestScene' }); }
-  init(data: { dungeon: DungeonState }): void { this.dungeon = data.dungeon; this.hasRested = false; }
+  init(data: { dungeon: DungeonState }): void {
+    this.dungeon = data.dungeon;
+    const room = this.dungeon.getCurrentRoom();
+    if (!room.shopState) {
+      room.shopState = {
+        items: ShopGenerator.generateShop(this.dungeon.progression, this.dungeon.currentLayerIndex),
+        hasRested: false,
+      };
+    }
+    this.shopItems = room.shopState.items;
+    this.hasRested = room.shopState.hasRested;
+  }
 
   create(): void {
     const prog = this.dungeon.progression;
@@ -30,7 +41,6 @@ export class ShopRestScene extends Phaser.Scene {
     this.add.text(cx, 78, `Gold: ${prog.gold}  |  HP: ${prog.currentHp}/${prog.maxHp}`, uiText(11, '#8899aa')).setOrigin(0.5);
 
     // ── Shop Items ────────────────────────────────────────────────────────
-    this.shopItems = ShopGenerator.generateShop(prog, this.dungeon.currentLayerIndex);
     const shopY = 110;
 
     this.add.text(cx - 200, shopY, 'SHOP', uiText(12, '#ccaa44', true));
@@ -79,6 +89,7 @@ export class ShopRestScene extends Phaser.Scene {
       restCard.on('pointerdown', () => {
         const healed = prog.rest();
         this.hasRested = true;
+        this.dungeon.getCurrentRoom().shopState!.hasRested = true;
         this.scene.restart({ dungeon: this.dungeon });
       });
     }

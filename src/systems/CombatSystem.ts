@@ -56,7 +56,7 @@ export class CombatSystem {
             if (now - lastTick >= ov.damageTickInterval) {
               proj.sprite.setData('lastAuraTick', now);
               const auraDamage = Math.round(proj.damage * 0.2);
-              enemy.takeDamage(auraDamage);
+              enemy.takeDamage(auraDamage, proj.castId === null ? undefined : { castId: proj.castId });
 
               if (proj.spell) {
                 const ctx: CastContext = {
@@ -64,6 +64,7 @@ export class CombatSystem {
                   targetX: enemy.sprite.x, targetY: enemy.sprite.y,
                   enemies: this.enemies, projectiles: this.projectiles,
                   statusEffects: this.statusEffects,
+                  castId: proj.castId ?? undefined,
                 };
                 SpellCaster.applyOnHit(ctx, enemy);
               }
@@ -84,10 +85,10 @@ export class CombatSystem {
         const hitRadius = proj.spell?.form.id === 'ORB' ? 20 : 24;
 
         if (dist < hitRadius) {
-          const enemyId = `${Math.round(enemy.sprite.x)},${Math.round(enemy.sprite.y)},${enemy.hp}`;
-          if (proj.maxPierceTargets > 0 && proj.hitEnemies.has(enemyId)) continue;
+          const usesReturningRules = proj.isReturning || proj.spell?.prefix?.behavior.type === 'returning';
+          if ((proj.maxPierceTargets > 0 || usesReturningRules) && proj.hitEnemies.has(enemy)) continue;
 
-          enemy.takeDamage(proj.damage);
+          enemy.takeDamage(proj.damage, proj.castId === null ? undefined : { castId: proj.castId });
 
           if (proj.spell) {
             const ctx: CastContext = {
@@ -95,13 +96,14 @@ export class CombatSystem {
               targetX: enemy.sprite.x, targetY: enemy.sprite.y,
               enemies: this.enemies, projectiles: this.projectiles,
               statusEffects: this.statusEffects,
+              castId: proj.castId ?? undefined,
             };
             SpellCaster.applyOnHit(ctx, enemy);
           }
 
           // Handle piercing
           if (proj.maxPierceTargets > 0) {
-            proj.hitEnemies.add(enemyId);
+            proj.hitEnemies.add(enemy);
             proj.pierceCount++;
 
             // Piercing visual feedback
@@ -120,6 +122,8 @@ export class CombatSystem {
             if (proj.pierceCount >= proj.maxPierceTargets) {
               proj.destroy();
             }
+          } else if (usesReturningRules) {
+            proj.hitEnemies.add(enemy);
           } else {
             proj.destroy();
           }

@@ -4,7 +4,7 @@ import Phaser from 'phaser';
 import { GrimoireSystem } from '../systems/GrimoireSystem';
 import { SpellBuilder, Spell } from '../systems/SpellBuilder';
 import { SpellValidator } from '../systems/SpellValidator';
-import { CoreId, FormId, PrefixId, SuffixId, CORE_REGISTRY, FORM_REGISTRY, PREFIX_REGISTRY, SUFFIX_REGISTRY, getAllCoreIds, getAllFormIds, getAllPrefixIds, getAllSuffixIds } from '../config/spellComponents';
+import { CoreId, FormId, PrefixId, SuffixId, CORE_REGISTRY, FORM_REGISTRY, PREFIX_REGISTRY, SUFFIX_REGISTRY } from '../config/spellComponents';
 import { ROOM_WIDTH, ROOM_HEIGHT, SPELL_SLOT_COUNT } from '../config/constants';
 import { uiText, applyTextShadow, createGlassPanel, GLASS } from '../config/uiStyles';
 import { getCoreTheme } from '../visuals/CoreVisualTheme';
@@ -282,21 +282,21 @@ export class GrimoireScene extends Phaser.Scene {
 
   private getPrefixItems(): CompItem[] {
     const items: CompItem[] = [{ id: null, name: 'None', mana: 0, color: 0x666677, desc: 'No prefix applied.' }];
-    for (const id of getAllPrefixIds()) { const p = PREFIX_REGISTRY[id]; items.push({ id, name: p.displayName, mana: p.manaCost, color: 0x88cc88, desc: p.description }); }
+    for (const id of this.gs.getAvailablePrefixIds()) { const p = PREFIX_REGISTRY[id]; items.push({ id, name: p.displayName, mana: p.manaCost, color: 0x88cc88, desc: p.description }); }
     return items;
   }
 
   private getCoreItems(): CompItem[] {
-    return getAllCoreIds().map(id => { const c = CORE_REGISTRY[id]; return { id, name: c.displayName, mana: c.manaCost, color: c.visual.color, desc: c.description }; });
+    return this.gs.getAvailableCoreIds().map(id => { const c = CORE_REGISTRY[id]; return { id, name: c.displayName, mana: c.manaCost, color: c.visual.color, desc: c.description }; });
   }
 
   private getFormItems(): CompItem[] {
-    return getAllFormIds().map(id => { const f = FORM_REGISTRY[id]; return { id, name: f.displayName, mana: f.manaCost, color: 0x8888dd, desc: f.description }; });
+    return this.gs.getAvailableFormIds().map(id => { const f = FORM_REGISTRY[id]; return { id, name: f.displayName, mana: f.manaCost, color: 0x8888dd, desc: f.description }; });
   }
 
   private getSuffixItems(): CompItem[] {
     const items: CompItem[] = [{ id: null, name: 'None', mana: 0, color: 0x666677, desc: 'No suffix applied.' }];
-    for (const id of getAllSuffixIds()) { const s = SUFFIX_REGISTRY[id]; items.push({ id, name: s.displayName, mana: s.manaCost, color: 0xccaa66, desc: s.description }); }
+    for (const id of this.gs.getAvailableSuffixIds()) { const s = SUFFIX_REGISTRY[id]; items.push({ id, name: s.displayName, mana: s.manaCost, color: 0xccaa66, desc: s.description }); }
     return items;
   }
 

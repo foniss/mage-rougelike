@@ -23,6 +23,8 @@ export interface FormContext {
   enemies: Enemy[];
   projectiles: Projectile[];
   statusEffects: StatusEffectSystem;
+  castId: number;
+  onHit?: (enemy: Enemy) => void;
   isEcho?: boolean;
 }
 
@@ -67,7 +69,7 @@ export class FormExecutor {
 
     const eCtx: EffectContext = {
       scene, spell, sourceX: px, sourceY: py,
-      enemies, statusEffects: ctx.statusEffects,
+      enemies, statusEffects: ctx.statusEffects, castId: ctx.castId,
     };
 
     for (const enemy of enemies) {
@@ -81,8 +83,8 @@ export class FormExecutor {
       while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
 
       if (Math.abs(angleDiff) <= halfArc) {
-        enemy.takeDamage(spell.damage);
-        CoreEffectExecutor.apply(eCtx, enemy);
+        enemy.takeDamage(spell.damage, { castId: ctx.castId });
+        FormExecutor.applyOnHit(ctx, eCtx, enemy);
       }
     }
   }
@@ -114,7 +116,7 @@ export class FormExecutor {
 
     const eCtx: EffectContext = {
       scene, spell, sourceX: px, sourceY: py,
-      enemies, statusEffects: ctx.statusEffects,
+      enemies, statusEffects: ctx.statusEffects, castId: ctx.castId,
     };
 
     // Initial hit
@@ -127,8 +129,8 @@ export class FormExecutor {
         enemy.sprite.x, enemy.sprite.y, px, py, endX, endY
       );
       if (dist <= beamWidth + ENEMY_RADIUS && t >= 0 && t <= 1) {
-        enemy.takeDamage(spell.damage);
-        CoreEffectExecutor.apply(eCtx, enemy);
+        enemy.takeDamage(spell.damage, { castId: ctx.castId });
+        FormExecutor.applyOnHit(ctx, eCtx, enemy);
       }
     }
 
@@ -146,8 +148,8 @@ export class FormExecutor {
             enemy.sprite.x, enemy.sprite.y, px, py, endX, endY
           );
           if (dist <= beamWidth + ENEMY_RADIUS && t >= 0 && t <= 1) {
-            enemy.takeDamage(Math.round(spell.damage * 0.3));
-            CoreEffectExecutor.apply(eCtx, enemy);
+            enemy.takeDamage(Math.round(spell.damage * 0.3), { castId: ctx.castId });
+            FormExecutor.applyOnHit(ctx, eCtx, enemy);
           }
         }
       },
@@ -167,7 +169,7 @@ export class FormExecutor {
     const projectile = new Projectile(scene, {
       x: player.sprite.x + Math.cos(angle) * spawnDist,
       y: player.sprite.y + Math.sin(angle) * spawnDist,
-      angle, spell,
+      angle, spell, castId: ctx.castId, returnTarget: player,
     });
     ctx.projectiles.push(projectile);
   }
@@ -233,15 +235,15 @@ export class FormExecutor {
 
       const eCtx: EffectContext = {
         scene, spell, sourceX: mineX, sourceY: mineY,
-        enemies, statusEffects: ctx.statusEffects,
+        enemies, statusEffects: ctx.statusEffects, castId: ctx.castId,
       };
 
       for (const enemy of enemies) {
         if (!enemy.alive) continue;
         const dist = Phaser.Math.Distance.Between(mineX, mineY, enemy.sprite.x, enemy.sprite.y);
         if (dist <= explosionRadius) {
-          enemy.takeDamage(spell.damage);
-          CoreEffectExecutor.apply(eCtx, enemy);
+          enemy.takeDamage(spell.damage, { castId: ctx.castId });
+          FormExecutor.applyOnHit(ctx, eCtx, enemy);
         }
       }
     };
@@ -271,15 +273,15 @@ export class FormExecutor {
     // Hit detection
     const eCtx: EffectContext = {
       scene, spell, sourceX: cx, sourceY: cy,
-      enemies, statusEffects: ctx.statusEffects,
+      enemies, statusEffects: ctx.statusEffects, castId: ctx.castId,
     };
 
     for (const enemy of enemies) {
       if (!enemy.alive) continue;
       const dist = Phaser.Math.Distance.Between(cx, cy, enemy.sprite.x, enemy.sprite.y);
       if (dist <= novaRadius) {
-        enemy.takeDamage(spell.damage);
-        CoreEffectExecutor.apply(eCtx, enemy);
+        enemy.takeDamage(spell.damage, { castId: ctx.castId });
+        FormExecutor.applyOnHit(ctx, eCtx, enemy);
       }
     }
   }
@@ -300,5 +302,13 @@ export class FormExecutor {
     const lenSq = dx * dx + dy * dy;
     if (lenSq === 0) return 0;
     return ((px - x1) * dx + (py - y1) * dy) / lenSq;
+  }
+
+  private static applyOnHit(ctx: FormContext, effectContext: EffectContext, enemy: Enemy): void {
+    if (ctx.onHit) {
+      ctx.onHit(enemy);
+    } else {
+      CoreEffectExecutor.apply(effectContext, enemy);
+    }
   }
 }

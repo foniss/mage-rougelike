@@ -5,7 +5,7 @@
 // calls the same applyBurn / applySlow methods.
 
 import Phaser from 'phaser';
-import { Enemy } from '../entities/Enemy';
+import { DamageSource, Enemy } from '../entities/Enemy';
 import {
   ENEMY_RADIUS,
   BURN_TICK_INTERVAL,
@@ -31,6 +31,7 @@ interface ActiveBurn {
   tickTimer: Phaser.Time.TimerEvent;
   particleTimer: Phaser.Time.TimerEvent;
   particles: Phaser.GameObjects.Arc[];
+  source?: DamageSource;
 }
 
 interface ActiveSlow {
@@ -62,7 +63,7 @@ export class StatusEffectSystem {
    * Apply or refresh a Burn effect on an enemy.
    * If the enemy already has a burn, refresh duration (and update damage if higher).
    */
-  applyBurn(enemy: Enemy, damagePerSecond: number, durationSeconds: number): void {
+  applyBurn(enemy: Enemy, damagePerSecond: number, durationSeconds: number, source?: DamageSource): void {
     if (!enemy.alive) return;
 
     const totalMs = durationSeconds * 1000;
@@ -74,6 +75,7 @@ export class StatusEffectSystem {
     if (existing) {
       // Refresh: reset remaining time, upgrade damage if higher
       existing.remainingMs = totalMs;
+      existing.source = source;
       if (damagePerSecond > existing.damagePerSecond) {
         existing.damagePerSecond = damagePerSecond;
       }
@@ -95,7 +97,7 @@ export class StatusEffectSystem {
 
         // Deal tick damage
         const tickDamage = (burn.damagePerSecond * BURN_TICK_INTERVAL) / 1000;
-        enemy.takeDamage(tickDamage);
+        enemy.takeDamage(tickDamage, burn.source);
 
         // Brief flash on each tick
         this.flashEnemy(enemy, 0xff4400, 80);
@@ -128,6 +130,7 @@ export class StatusEffectSystem {
       tickTimer,
       particleTimer,
       particles,
+      source,
     });
   }
 

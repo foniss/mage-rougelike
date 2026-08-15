@@ -39,6 +39,14 @@ export class GameScene extends Phaser.Scene {
   private slotKeys: Phaser.Input.Keyboard.Key[] = [];
   private feedbackText!: Phaser.GameObjects.Text;
   private feedbackTimer: Phaser.Time.TimerEvent | null = null;
+  private readonly onPointerDown = (pointer: Phaser.Input.Pointer): void => {
+    if (pointer.leftButtonDown() && !this.gameOver && !this.grimoireOpen && !this.combatResolved) {
+      this.handleLeftClick(pointer);
+    }
+  };
+  private readonly onProjectileCreated = (proj: Projectile): void => {
+    this.projectiles.push(proj);
+  };
 
   constructor() { super({ key: 'GameScene' }); }
 
@@ -76,9 +84,8 @@ export class GameScene extends Phaser.Scene {
     this.events.on('player-died', this.onPlayerDied, this);
     this.events.on('enemy-died', this.onEnemyDied, this);
     this.events.on('spell-slots-updated', this.onSpellSlotsUpdated, this);
-    this.events.on('projectile-created', (proj: Projectile) => {
-      this.projectiles.push(proj);
-    });
+    this.events.on('projectile-created', this.onProjectileCreated, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.handleShutdown, this);
 
     this.time.timeScale = 1;
     this.physics.world.timeScale = 1;
@@ -206,11 +213,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private setupInput(): void {
-    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (pointer.leftButtonDown() && !this.gameOver && !this.grimoireOpen && !this.combatResolved) {
-        this.handleLeftClick(pointer);
-      }
-    });
+    this.input.on('pointerdown', this.onPointerDown, this);
 
     if (this.input.keyboard) {
       this.restartKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
@@ -547,14 +550,23 @@ export class GameScene extends Phaser.Scene {
   }
 
   private restartGame(): void {
-    this.events.off('player-died', this.onPlayerDied, this);
-    this.events.off('enemy-died', this.onEnemyDied, this);
-    this.events.off('spell-slots-updated', this.onSpellSlotsUpdated, this);
-    this.statusEffectSystem.clearAll();
     if (this.grimoireOpen) this.forceCloseGrimoire();
     if (this.scene.isActive('HUDScene')) this.scene.stop('HUDScene');
     this.time.timeScale = 1;
     this.physics.world.timeScale = 1;
     this.scene.restart();
+  }
+
+  private handleShutdown(): void {
+    this.input.off('pointerdown', this.onPointerDown, this);
+    this.events.off('player-died', this.onPlayerDied, this);
+    this.events.off('enemy-died', this.onEnemyDied, this);
+    this.events.off('spell-slots-updated', this.onSpellSlotsUpdated, this);
+    this.events.off('projectile-created', this.onProjectileCreated, this);
+    if (this.feedbackTimer) {
+      this.feedbackTimer.destroy();
+      this.feedbackTimer = null;
+    }
+    this.statusEffectSystem?.clearAll();
   }
 }

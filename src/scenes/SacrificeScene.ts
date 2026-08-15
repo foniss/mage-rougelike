@@ -2,16 +2,17 @@
 
 import Phaser from 'phaser';
 import { DungeonState } from '../systems/dungeon/DungeonState';
-import { RewardGenerator, Reward } from '../systems/dungeon/RewardGenerator';
-import { RewardType, SACRIFICE_TIER_WEIGHTS, REWARD_DISPLAY, MANA_PER_NEW_COMPONENT, GOLD_REWARDS } from '../config/dungeonConfig';
+import { RewardGenerator } from '../systems/dungeon/RewardGenerator';
+import { RewardType, SACRIFICE_TIER_WEIGHTS } from '../config/dungeonConfig';
 import { ROOM_WIDTH, ROOM_HEIGHT } from '../config/constants';
 import { uiText, applyTextShadow, createGlassPanel } from '../config/uiStyles';
 import { CoreId, FormId, PrefixId, SuffixId } from '../config/spellComponents';
 
 export class SacrificeScene extends Phaser.Scene {
   private dungeon!: DungeonState;
+  private resolved = false;
   constructor() { super({ key: 'SacrificeScene' }); }
-  init(data: { dungeon: DungeonState }): void { this.dungeon = data.dungeon; }
+  init(data: { dungeon: DungeonState }): void { this.dungeon = data.dungeon; this.resolved = false; }
 
   create(): void {
     const prog = this.dungeon.progression;
@@ -65,12 +66,12 @@ export class SacrificeScene extends Phaser.Scene {
     leaveBtn.setStrokeStyle(1, 0x888888, 0.3).setInteractive({ useHandCursor: true });
     this.add.text(cx, ROOM_HEIGHT - 60, 'LEAVE', uiText(13, '#aabbcc', true)).setOrigin(0.5).setDepth(11);
     leaveBtn.on('pointerdown', () => {
-      this.dungeon.advanceRoom();
-      this.scene.start('DungeonMapScene', { dungeon: this.dungeon });
+      this.completeRoom();
     });
   }
 
   private doSacrifice(candidate: { type: string; id: string; name: string }): void {
+    if (this.resolved) return;
     const prog = this.dungeon.progression;
 
     // Remove the sacrificed component
@@ -88,10 +89,7 @@ export class SacrificeScene extends Phaser.Scene {
     const tier = RewardGenerator.rollSacrificeTier();
     const reward = RewardGenerator.generateSacrificeReward(tier, prog);
 
-    // Show result scene
-    const rewards: Reward[] = [];
     if (reward) {
-      rewards.push(reward);
       // Apply immediately
       switch (reward.type) {
         case RewardType.CORE: if (reward.id) prog.addCore(reward.id as CoreId); break;
@@ -109,10 +107,13 @@ export class SacrificeScene extends Phaser.Scene {
       }
     }
 
-    // Advance and show what happened
-    this.dungeon.advanceRoom();
+    this.completeRoom();
+  }
 
-    // Quick result display then move on
-    this.scene.restart({ dungeon: this.dungeon });
+  private completeRoom(): void {
+    if (this.resolved) return;
+    this.resolved = true;
+    this.dungeon.advanceRoom();
+    this.scene.start('DungeonMapScene', { dungeon: this.dungeon });
   }
 }

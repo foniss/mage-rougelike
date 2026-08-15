@@ -23,6 +23,7 @@ export interface EffectContext {
   sourceY: number;
   enemies: Enemy[];
   statusEffects: StatusEffectSystem;
+  castId: number;
   onKillCallback?: (enemy: Enemy) => void;
 }
 
@@ -61,7 +62,7 @@ export class CoreEffectExecutor {
     // Visual hit feedback
     theme.renderImpact(ctx.scene, enemy.sprite.x, enemy.sprite.y, ctx.spell.visual, 15);
 
-    ctx.statusEffects.applyBurn(enemy, cfg.damagePerSecond, cfg.duration);
+    ctx.statusEffects.applyBurn(enemy, cfg.damagePerSecond, cfg.duration, { castId: ctx.castId });
 
     // Ongoing burn visuals on the enemy
     const burnVisualTimer = ctx.scene.time.addEvent({
@@ -256,7 +257,7 @@ export class CoreEffectExecutor {
         arcsRemaining--;
 
         const arcDmg = Math.round(ctx.spell.damage * cfg.arcDamagePercent);
-        other.takeDamage(arcDmg);
+        other.takeDamage(arcDmg, { castId: ctx.castId });
 
         // Core-themed arc between enemies
         theme.renderArc(
