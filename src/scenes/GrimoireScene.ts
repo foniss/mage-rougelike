@@ -6,7 +6,7 @@ import { SpellBuilder, Spell } from '../systems/SpellBuilder';
 import { SpellValidator } from '../systems/SpellValidator';
 import { CoreId, FormId, PrefixId, SuffixId, CORE_REGISTRY, FORM_REGISTRY, PREFIX_REGISTRY, SUFFIX_REGISTRY } from '../config/spellComponents';
 import { ROOM_WIDTH, ROOM_HEIGHT, SPELL_SLOT_COUNT } from '../config/constants';
-import { uiText, applyTextShadow, createGlassPanel, GLASS } from '../config/uiStyles';
+import { uiText, applyTextShadow, createGlassPanel, GLASS, OC, ASPECT_COLORS } from '../config/uiStyles';
 import { getCoreTheme } from '../visuals/CoreVisualTheme';
 
 type CompItem = { id: string | null; name: string; mana: number; color: number; desc: string };
@@ -25,12 +25,6 @@ interface ChainSlot { box: Phaser.GameObjects.Rectangle; border: Phaser.GameObje
 interface LoadoutCard { container: Phaser.GameObjects.Container; bg: Phaser.GameObjects.Rectangle; border: Phaser.GameObjects.Rectangle; numTxt: Phaser.GameObjects.Text; nameTxt: Phaser.GameObjects.Text; manaTxt: Phaser.GameObjects.Text; glow: Phaser.GameObjects.Rectangle }
 interface RecentEntry { name: string; color: number; manaCost: number; sP: PrefixId | null; sC: CoreId; sF: FormId; sS: SuffixId | null }
 
-const OC = {
-  void: 0x07050c, panel: 0x0d0915, panel2: 0x110c1b,
-  purple: 0x8f6bc2, purpleBright: 0xbda1f4,
-  crimson: 0x9c384c, crimsonBright: 0xe16a78,
-  gold: 0xc39b58, bone: 0xd8d0c2, blue: 0x7194cc, black: 0x020106,
-};
 
 function formSym(id: string, n: string): string {
   const l = (n || id || '').toLowerCase();
@@ -282,7 +276,7 @@ export class GrimoireScene extends Phaser.Scene {
 
   private getPrefixItems(): CompItem[] {
     const items: CompItem[] = [{ id: null, name: 'None', mana: 0, color: 0x666677, desc: 'No prefix applied.' }];
-    for (const id of this.gs.getAvailablePrefixIds()) { const p = PREFIX_REGISTRY[id]; items.push({ id, name: p.displayName, mana: p.manaCost, color: 0x88cc88, desc: p.description }); }
+    for (const id of this.gs.getAvailablePrefixIds()) { const p = PREFIX_REGISTRY[id]; items.push({ id, name: p.displayName, mana: p.manaCost, color: ASPECT_COLORS.PREFIX, desc: p.description }); }
     return items;
   }
 
@@ -291,12 +285,12 @@ export class GrimoireScene extends Phaser.Scene {
   }
 
   private getFormItems(): CompItem[] {
-    return this.gs.getAvailableFormIds().map(id => { const f = FORM_REGISTRY[id]; return { id, name: f.displayName, mana: f.manaCost, color: 0x8888dd, desc: f.description }; });
+    return this.gs.getAvailableFormIds().map(id => { const f = FORM_REGISTRY[id]; return { id, name: f.displayName, mana: f.manaCost, color: ASPECT_COLORS.FORM, desc: f.description }; });
   }
 
   private getSuffixItems(): CompItem[] {
     const items: CompItem[] = [{ id: null, name: 'None', mana: 0, color: 0x666677, desc: 'No suffix applied.' }];
-    for (const id of this.gs.getAvailableSuffixIds()) { const s = SUFFIX_REGISTRY[id]; items.push({ id, name: s.displayName, mana: s.manaCost, color: 0xccaa66, desc: s.description }); }
+    for (const id of this.gs.getAvailableSuffixIds()) { const s = SUFFIX_REGISTRY[id]; items.push({ id, name: s.displayName, mana: s.manaCost, color: ASPECT_COLORS.SUFFIX, desc: s.description }); }
     return items;
   }
 
@@ -437,10 +431,10 @@ export class GrimoireScene extends Phaser.Scene {
 
   private refreshChain(): void {
     const entries = [
-      { id: this.sP, reg: this.sP ? PREFIX_REGISTRY[this.sP] : null, col: 0x88cc88 },
-      { id: this.sC, reg: this.sC ? CORE_REGISTRY[this.sC] : null, col: this.sC ? CORE_REGISTRY[this.sC].visual.color : 0x8888aa },
-      { id: this.sF, reg: this.sF ? FORM_REGISTRY[this.sF] : null, col: 0x8888dd },
-      { id: this.sS, reg: this.sS ? SUFFIX_REGISTRY[this.sS] : null, col: 0xccaa66 },
+      { id: this.sP, reg: this.sP ? PREFIX_REGISTRY[this.sP] : null, col: ASPECT_COLORS.PREFIX },
+      { id: this.sC, reg: this.sC ? CORE_REGISTRY[this.sC] : null, col: this.sC ? CORE_REGISTRY[this.sC].visual.color : ASPECT_COLORS.CORE },
+      { id: this.sF, reg: this.sF ? FORM_REGISTRY[this.sF] : null, col: ASPECT_COLORS.FORM },
+      { id: this.sS, reg: this.sS ? SUFFIX_REGISTRY[this.sS] : null, col: ASPECT_COLORS.SUFFIX },
     ];
     for (let i = 0; i < 4; i++) {
       const e = entries[i], s = this.chain[i]; if (!s) continue;

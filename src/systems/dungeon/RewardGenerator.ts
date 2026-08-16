@@ -21,7 +21,14 @@
 //  5. The category with FEWER items gets (1 - that probability)
 //  6. If one category has no unowned items left, 100% goes to the other
 //  7. If both are exhausted, return null
-// ═══════════════════════════════════════════════════════════════════════════
+//
+//  REWARD CHOICES (NEW):
+//  - Normal: 2 choices from selected category (Core OR Form)
+//  - Elite: 3 choices from selected category (Prefix OR Suffix)
+//  - Never mix categories in a single reward
+//  - Filter out already-owned components
+//  - Gracefully handle insufficient unowned components
+// ════════════════════════════════════════════════════════════════════════════
 
 import {
   RoomType, RewardType,
@@ -37,15 +44,32 @@ import {
 } from '../../config/spellComponents';
 import { PlayerProgression } from './PlayerProgression';
 
-// ── Reward Object ─────────────────────────────────────────────────────────
+// ── Reward Choice Object ────────────────────────────────────────────────────
 
-export interface Reward {
+/**
+ * A single reward option presented to the player.
+ * Contains all info needed for display and application.
+ */
+export interface RewardChoice {
   type: RewardType;
-  id?: string;
-  amount?: number;
+  id: CoreId | FormId | PrefixId | SuffixId;
   displayName: string;
   description: string;
-  isNew: boolean;
+  categoryLabel: string;  // 'CORE', 'FORM', 'PREFIX', 'SUFFIX'
+  categoryColor: number;  // for UI theming
+  visualConfig?: any;     // optional visual config for card rendering
+}
+
+// ── Reward Bundle ───────────────────────────────────────────────────────────
+
+/**
+ * Complete reward bundle for a room.
+ * Contains gold (auto-granted) and a set of choices (player picks one).
+ */
+export interface RewardBundle {
+  gold: Reward;           // auto-granted gold reward
+  choices: RewardChoice[]; // player must pick exactly one
+  category: 'core' | 'form' | 'prefix' | 'suffix' | 'none'; // which category was selected
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -56,60 +80,60 @@ export class RewardGenerator {
 
   // ── Room-type reward bundles ──────────────────────────────────────────
 
-  static generateNormalRewards(prog: PlayerProgression, layerIndex: number): Reward[] {
-    const rewards: Reward[] = [];
-    rewards.push(RewardGenerator.goldReward(GOLD_REWARDS.normal.min, GOLD_REWARDS.normal.max));
-
-    const comp = RewardGenerator.balancedCoreOrForm(prog);
-    if (comp) rewards.push(comp);
-
-    return rewards;
+  /**
+   * Normal combat: 2 choices from Core OR Form (balanced), plus gold.
+   */
+  static generateNormalRewards(prog: PlayerProgression, layerIndex: number): RewardBundle {
+    const gold = RewardGenerator.goldReward(GOLD_REWARDS.normal.min, GOLD_REWARDS.normal.max);
+    const { choices, category } = RewardGenerator.generateCoreOrFormChoices(prog, 2);
+    return { gold, choices, category };
   }
 
-  static generateEliteRewards(prog: PlayerProgression, layerIndex: number): Reward[] {
-    const rewards: Reward[] = [];
-    rewards.push(RewardGenerator.goldReward(GOLD_REWARDS.elite.min, GOLD_REWARDS.elite.max));
-
-    const comp = RewardGenerator.balancedPrefixOrSuffix(prog);
-    if (comp) rewards.push(comp);
-
-    return rewards;
+  /**
+   * Elite combat: 3 choices from Prefix OR Suffix (balanced), plus gold.
+   */
+  static generateEliteRewards(prog: PlayerProgression, layerIndex: number): RewardBundle {
+    const gold = RewardGenerator.goldReward(GOLD_REWARDS.elite.min, GOLD_REWARDS.elite.max);
+    const { choices, category } = RewardGenerator.generatePrefixOrSuffixChoices(prog, 3);
+    return { gold, choices, category };
   }
 
-  static generateSinBossRewards(prog: PlayerProgression): Reward[] {
-    const rewards: Reward[] = [];
-    rewards.push(RewardGenerator.goldReward(GOLD_REWARDS.sinBoss.min, GOLD_REWARDS.sinBoss.max));
-    // Sin Relic is awarded separately by SinGenerator in RewardScene
-    return rewards;
+  /**
+   * Sin Boss: gold only (Sin Relic handled separately in RewardScene).
+   */
+  static generateSinBossRewards(prog: PlayerProgression): RewardBundle {
+    const gold = RewardGenerator.goldReward(GOLD_REWARDS.sinBoss.min, GOLD_REWARDS.sinBoss.max);
+    return { gold, choices: [], category: 'none' };
   }
 
-  static generateDevilRewards(prog: PlayerProgression): Reward[] {
-    const rewards: Reward[] = [];
-    // Devil is the final fight of the run — gold has nowhere left to be spent,
-    // so this intentionally uses its own (zero) tier rather than the Sin Boss tier.
-    if (GOLD_REWARDS.devil.max > 0) {
-      rewards.push(RewardGenerator.goldReward(GOLD_REWARDS.devil.min, GOLD_REWARDS.devil.max));
-    }
-    return rewards;
+  /**
+   * Devil: gold only (no component rewards).
+   */
+  static generateDevilRewards(prog: PlayerProgression): RewardBundle {
+    const gold = RewardGenerator.goldReward(GOLD_REWARDS.devil.min, GOLD_REWARDS.devil.max);
+    return { gold, choices: [], category: 'none' };
   }
 
   // ── Vault ─────────────────────────────────────────────────────────────
 
-  static generateVaultRewards(category: VaultCategory, prog: PlayerProgression): Reward[] {
+  static generateVaultRewards(category: VaultCategory, prog: PlayerProgression): RewardBundle {
     switch (category) {
       case VaultCategory.FOUNDATION: {
-        const comp = RewardGenerator.balancedCoreOrForm(prog);
-        return comp ? [comp] : [];
+        const { choices, category: cat } = RewardGenerator.generateCoreOrFormChoices(prog, 2);
+        const gold = RewardGenerator.goldReward(0, 0); // no gold for vault foundation
+        return { gold, choices, category: cat };
       }
       case VaultCategory.ARSENAL: {
-        const comp = RewardGenerator.balancedPrefixOrSuffix(prog);
-        return comp ? [comp] : [];
+        const { choices, category: cat } = RewardGenerator.generatePrefixOrSuffixChoices(prog, 3);
+        const gold = RewardGenerator.goldReward(0, 0);
+        return { gold, choices, category: cat };
       }
       case VaultCategory.FORTUNE: {
-        return [RewardGenerator.goldReward(
+        const gold = RewardGenerator.goldReward(
           VAULT_REWARDS[VaultCategory.FORTUNE].goldMin,
           VAULT_REWARDS[VaultCategory.FORTUNE].goldMax,
-        )];
+        );
+        return { gold, choices: [], category: 'none' };
       }
     }
   }
@@ -124,54 +148,67 @@ export class RewardGenerator {
     return 'epic';
   }
 
-  static generateSacrificeReward(tier: 'common' | 'rare' | 'epic', prog: PlayerProgression): Reward | null {
+  static generateSacrificeReward(tier: 'common' | 'rare' | 'epic', prog: PlayerProgression): RewardBundle | null {
     switch (tier) {
-      case 'common':
-        return RewardGenerator.balancedCoreOrForm(prog);
-      case 'rare':
-        return RewardGenerator.balancedPrefixOrSuffix(prog);
-      case 'epic':
+      case 'common': {
+        const { choices, category } = RewardGenerator.generateCoreOrFormChoices(prog, 2);
+        const gold = RewardGenerator.goldReward(0, 0);
+        return { gold, choices, category };
+      }
+      case 'rare': {
+        const { choices, category } = RewardGenerator.generatePrefixOrSuffixChoices(prog, 3);
+        const gold = RewardGenerator.goldReward(0, 0);
+        return { gold, choices, category };
+      }
+      case 'epic': {
+        const gold = RewardGenerator.goldReward(0, 0);
         return {
-          type: RewardType.SIN_RELIC,
-          displayName: 'Sin Relic',
-          description: 'A powerful active ability born of sacrifice.',
-          isNew: true,
+          gold,
+          choices: [{
+            type: RewardType.SIN_RELIC,
+            id: 'SIN_RELIC' as any,
+            displayName: 'Sin Relic',
+            description: 'A powerful active ability born of sacrifice.',
+            categoryLabel: 'SIN RELIC',
+            categoryColor: 0xff4466,
+          }],
+          category: 'none',
         };
+      }
     }
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  //  BALANCED SELECTION ALGORITHMS
+  //  CHOICE GENERATION (NEW)
   // ═══════════════════════════════════════════════════════════════════════
 
   /**
-   * Select a Core OR Form using the balanced probability system.
-   *
-   * Algorithm:
-   * 1. Get unowned cores and forms
-   * 2. If both empty → null
-   * 3. If only one has items → 100% that category
-   * 4. Otherwise, compare owned counts and apply balance ratios
-   * 5. Roll, pick category, then pick random unowned from that category
+   * Generate N choices from Core OR Form using balanced probability.
+   * Returns the choices and which category was selected.
    */
-  static balancedCoreOrForm(prog: PlayerProgression): Reward | null {
+  static generateCoreOrFormChoices(prog: PlayerProgression, count: number): { choices: RewardChoice[]; category: 'core' | 'form' } {
     const unownedCores = prog.getUnownedCores();
     const unownedForms = prog.getUnownedForms();
 
     // Edge: nothing available
-    if (unownedCores.length === 0 && unownedForms.length === 0) return null;
+    if (unownedCores.length === 0 && unownedForms.length === 0) {
+      return { choices: [], category: 'core' };
+    }
 
     // Edge: only one category has unowned items
-    if (unownedCores.length === 0) return RewardGenerator.randomFormReward(unownedForms);
-    if (unownedForms.length === 0) return RewardGenerator.randomCoreReward(unownedCores);
+    if (unownedCores.length === 0) {
+      return { choices: RewardGenerator.buildFormChoices(unownedForms, count), category: 'form' };
+    }
+    if (unownedForms.length === 0) {
+      return { choices: RewardGenerator.buildCoreChoices(unownedCores, count), category: 'core' };
+    }
 
-    // Balanced probability
+    // Balanced probability (PRESERVES EXISTING LOGIC)
     const coreCount = prog.getCoreCount();
     const formCount = prog.getFormCount();
     const diff = Math.abs(coreCount - formCount);
     const moreProbability = getBalancedProbability(diff);
 
-    // Determine which category has MORE
     let coreProbability: number;
     if (coreCount > formCount) {
       coreProbability = moreProbability;  // Core has more → lower probability
@@ -181,25 +218,31 @@ export class RewardGenerator {
       coreProbability = 0.5;  // Equal
     }
 
-    // Roll
+    // Roll category
     if (Math.random() < coreProbability) {
-      return RewardGenerator.randomCoreReward(unownedCores);
+      return { choices: RewardGenerator.buildCoreChoices(unownedCores, count), category: 'core' };
     } else {
-      return RewardGenerator.randomFormReward(unownedForms);
+      return { choices: RewardGenerator.buildFormChoices(unownedForms, count), category: 'form' };
     }
   }
 
   /**
-   * Select a Prefix OR Suffix using the balanced probability system.
-   * Same algorithm as Core/Form but for the modifier categories.
+   * Generate N choices from Prefix OR Suffix using balanced probability.
+   * Returns the choices and which category was selected.
    */
-  static balancedPrefixOrSuffix(prog: PlayerProgression): Reward | null {
+  static generatePrefixOrSuffixChoices(prog: PlayerProgression, count: number): { choices: RewardChoice[]; category: 'prefix' | 'suffix' } {
     const unownedPrefixes = prog.getUnownedPrefixes();
     const unownedSuffixes = prog.getUnownedSuffixes();
 
-    if (unownedPrefixes.length === 0 && unownedSuffixes.length === 0) return null;
-    if (unownedPrefixes.length === 0) return RewardGenerator.randomSuffixReward(unownedSuffixes);
-    if (unownedSuffixes.length === 0) return RewardGenerator.randomPrefixReward(unownedPrefixes);
+    if (unownedPrefixes.length === 0 && unownedSuffixes.length === 0) {
+      return { choices: [], category: 'prefix' };
+    }
+    if (unownedPrefixes.length === 0) {
+      return { choices: RewardGenerator.buildSuffixChoices(unownedSuffixes, count), category: 'suffix' };
+    }
+    if (unownedSuffixes.length === 0) {
+      return { choices: RewardGenerator.buildPrefixChoices(unownedPrefixes, count), category: 'prefix' };
+    }
 
     const prefixCount = prog.getPrefixCount();
     const suffixCount = prog.getSuffixCount();
@@ -216,14 +259,86 @@ export class RewardGenerator {
     }
 
     if (Math.random() < prefixProbability) {
-      return RewardGenerator.randomPrefixReward(unownedPrefixes);
+      return { choices: RewardGenerator.buildPrefixChoices(unownedPrefixes, count), category: 'prefix' };
     } else {
-      return RewardGenerator.randomSuffixReward(unownedSuffixes);
+      return { choices: RewardGenerator.buildSuffixChoices(unownedSuffixes, count), category: 'suffix' };
     }
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  //  INDIVIDUAL REWARD CONSTRUCTORS
+  //  CHOICE BUILDERS
+  // ═══════════════════════════════════════════════════════════════════════
+
+  private static buildCoreChoices(unowned: CoreId[], count: number): RewardChoice[] {
+    const shuffled = [...unowned].sort(() => Math.random() - 0.5);
+    const selected = shuffled.slice(0, Math.min(count, shuffled.length));
+    return selected.map(id => {
+      const reg = CORE_REGISTRY[id];
+      return {
+        type: RewardType.CORE,
+        id,
+        displayName: reg?.displayName || id,
+        description: reg?.description || 'A new elemental core.',
+        categoryLabel: 'CORE',
+        categoryColor: 0xff8844,
+        visualConfig: reg?.visual,
+      };
+    });
+  }
+
+  private static buildFormChoices(unowned: FormId[], count: number): RewardChoice[] {
+    const shuffled = [...unowned].sort(() => Math.random() - 0.5);
+    const selected = shuffled.slice(0, Math.min(count, shuffled.length));
+    return selected.map(id => {
+      const reg = FORM_REGISTRY[id];
+      return {
+        type: RewardType.FORM,
+        id,
+        displayName: reg?.displayName || id,
+        description: reg?.description || 'A new spell form.',
+        categoryLabel: 'FORM',
+        categoryColor: 0x8888ff,
+        visualConfig: reg?.formVisual,
+      };
+    });
+  }
+
+  private static buildPrefixChoices(unowned: PrefixId[], count: number): RewardChoice[] {
+    const shuffled = [...unowned].sort(() => Math.random() - 0.5);
+    const selected = shuffled.slice(0, Math.min(count, shuffled.length));
+    return selected.map(id => {
+      const reg = PREFIX_REGISTRY[id];
+      return {
+        type: RewardType.PREFIX,
+        id,
+        displayName: reg?.displayName || id,
+        description: reg?.description || 'A new spell modifier.',
+        categoryLabel: 'PREFIX',
+        categoryColor: 0x88cc88,
+        visualConfig: reg?.visual,
+      };
+    });
+  }
+
+  private static buildSuffixChoices(unowned: SuffixId[], count: number): RewardChoice[] {
+    const shuffled = [...unowned].sort(() => Math.random() - 0.5);
+    const selected = shuffled.slice(0, Math.min(count, shuffled.length));
+    return selected.map(id => {
+      const reg = SUFFIX_REGISTRY[id];
+      return {
+        type: RewardType.SUFFIX,
+        id,
+        displayName: reg?.displayName || id,
+        description: reg?.description || 'A new spell suffix.',
+        categoryLabel: 'SUFFIX',
+        categoryColor: 0xccaa66,
+        visualConfig: reg?.visual,
+      };
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  //  INDIVIDUAL REWARD CONSTRUCTORS (legacy - kept for compatibility)
   // ═══════════════════════════════════════════════════════════════════════
 
   static goldReward(min: number, max: number): Reward {
@@ -237,6 +352,7 @@ export class RewardGenerator {
     };
   }
 
+  // Legacy single-reward methods (kept for any existing callers)
   private static randomCoreReward(unowned: CoreId[]): Reward {
     const id = unowned[Math.floor(Math.random() * unowned.length)];
     const reg = CORE_REGISTRY[id];
@@ -284,4 +400,15 @@ export class RewardGenerator {
       isNew: true,
     };
   }
+}
+
+// ── Legacy Reward interface (for backward compatibility) ────────────────────
+
+export interface Reward {
+  type: RewardType;
+  id?: string;
+  amount?: number;
+  displayName: string;
+  description: string;
+  isNew: boolean;
 }

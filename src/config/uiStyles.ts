@@ -9,6 +9,27 @@ export const UI_FONT_MONO =
 /** Higher resolution keeps text sharp on HiDPI displays. */
 export const UI_TEXT_RESOLUTION = 2;
 
+/**
+ * The core Occult Color palette used throughout the game's UI.
+ */
+export const OC = {
+  void: 0x07050c, panel: 0x0d0915, panel2: 0x110c1b,
+  purple: 0x8f6bc2, purpleBright: 0xbda1f4,
+  crimson: 0x9c384c, crimsonBright: 0xe16a78,
+  gold: 0xc39b58, bone: 0xd8d0c2, blue: 0x7194cc, black: 0x020106,
+} as const;
+
+/** 
+ * Standardized colors for the spell components. 
+ * Core colors can be dynamic based on elements, but these are the defaults.
+ */
+export const ASPECT_COLORS = {
+  CORE: 0x8888aa,
+  FORM: 0x8888dd,
+  PREFIX: 0x88cc88,
+  SUFFIX: 0xccaa66,
+} as const;
+
 export interface UiTextStyle extends Phaser.Types.GameObjects.Text.TextStyle {
   resolution?: number;
 }

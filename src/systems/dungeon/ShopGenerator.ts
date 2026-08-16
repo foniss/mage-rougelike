@@ -2,7 +2,7 @@
 
 import { SHOP_PRICES, RewardType } from '../../config/dungeonConfig';
 import { PlayerProgression } from './PlayerProgression';
-import { RewardGenerator, Reward } from './RewardGenerator';
+import { RewardGenerator, Reward, RewardChoice } from './RewardGenerator';
 
 export interface ShopItem {
   id: string;
@@ -38,19 +38,35 @@ export class ShopGenerator {
     // Random component: one Core/Form slot, one Prefix/Suffix slot.
     // (Previously the shop only ever offered Core/Form via generateNormalRewards,
     // meaning Prefixes/Suffixes could never be bought — this adds the missing slot.)
-    const foundation = RewardGenerator.balancedCoreOrForm(progression);
-    if (foundation) {
+    const foundationBundle = RewardGenerator.generateCoreOrFormChoices(progression, 1);
+    if (foundationBundle.choices.length > 0) {
+      const choice = foundationBundle.choices[0];
+      const reward: Reward = {
+        type: choice.type,
+        id: choice.id as string,
+        displayName: choice.displayName,
+        description: choice.description,
+        isNew: true,
+      };
       items.push({
-        id: 'component-foundation', displayName: foundation.displayName, description: foundation.description,
-        price: SHOP_PRICES.component, type: foundation.type, reward: foundation, purchased: false,
+        id: 'component-foundation', displayName: choice.displayName, description: choice.description,
+        price: SHOP_PRICES.component, type: choice.type, reward, purchased: false,
       });
     }
 
-    const arsenal = RewardGenerator.balancedPrefixOrSuffix(progression);
-    if (arsenal) {
+    const arsenalBundle = RewardGenerator.generatePrefixOrSuffixChoices(progression, 1);
+    if (arsenalBundle.choices.length > 0) {
+      const choice = arsenalBundle.choices[0];
+      const reward: Reward = {
+        type: choice.type,
+        id: choice.id as string,
+        displayName: choice.displayName,
+        description: choice.description,
+        isNew: true,
+      };
       items.push({
-        id: 'component-arsenal', displayName: arsenal.displayName, description: arsenal.description,
-        price: SHOP_PRICES.component, type: arsenal.type, reward: arsenal, purchased: false,
+        id: 'component-arsenal', displayName: choice.displayName, description: choice.description,
+        price: SHOP_PRICES.component, type: choice.type, reward, purchased: false,
       });
     }
 

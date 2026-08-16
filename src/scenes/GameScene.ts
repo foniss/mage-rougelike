@@ -9,8 +9,7 @@ import { GrimoireSystem } from '../systems/GrimoireSystem';
 import { SpellCaster } from '../systems/SpellCaster';
 import { StatusEffectSystem } from '../systems/StatusEffectSystem';
 import { DungeonState } from '../systems/dungeon/DungeonState';
-import { RewardGenerator } from '../systems/dungeon/RewardGenerator';
-import { Reward } from '../systems/dungeon/RewardGenerator';
+import { RewardGenerator, RewardBundle } from '../systems/dungeon/RewardGenerator';
 import {
   ENEMY_RADIUS, ROOM_WIDTH, ROOM_HEIGHT, WALL_THICKNESS,
   ENEMY_COUNT, GRIMOIRE_TIME_SCALE, SPELL_SLOT_COUNT, ENEMY_MAX_HP,
@@ -438,22 +437,22 @@ export class GameScene extends Phaser.Scene {
         const prog = this.dungeonState.progression;
         const layerIdx = this.dungeonState.currentLayerIndex;
 
-        let rewards: Reward[] = [];
+        let rewardBundle: RewardBundle;
         switch (this.roomType) {
           case RoomType.NORMAL:
-            rewards = RewardGenerator.generateNormalRewards(prog, layerIdx);
+            rewardBundle = RewardGenerator.generateNormalRewards(prog, layerIdx);
             break;
           case RoomType.ELITE:
-            rewards = RewardGenerator.generateEliteRewards(prog, layerIdx);
+            rewardBundle = RewardGenerator.generateEliteRewards(prog, layerIdx);
             break;
           case RoomType.SIN_BOSS:
-            rewards = RewardGenerator.generateSinBossRewards(prog);
+            rewardBundle = RewardGenerator.generateSinBossRewards(prog);
             break;
           case RoomType.DEVIL:
-            rewards = RewardGenerator.generateDevilRewards(prog);
+            rewardBundle = RewardGenerator.generateDevilRewards(prog);
             break;
           default:
-            rewards = [];
+            rewardBundle = { gold: RewardGenerator.goldReward(0, 0), choices: [], category: 'none' };
         }
 
         this.showFeedback('VICTORY!', '#ffcc44');
@@ -462,7 +461,7 @@ export class GameScene extends Phaser.Scene {
           if (this.scene.isActive('HUDScene')) this.scene.stop('HUDScene');
           this.scene.start('RewardScene', {
             dungeon: this.dungeonState,
-            rewards,
+            rewardBundle,
             roomType: this.roomType,
           });
         });
