@@ -1,35 +1,10 @@
-// src/config/spellComponents.ts
-//
-// Component definitions with structure and compatibility.
-// Numerical values are read from BalanceManager at build time.
-
 import { BalanceManager } from '../systems/BalanceManager';
-
-// ── Enums ─────────────────────────────────────────────────────────────────
-
-export enum CoreId {
-  FIRE = 'FIRE', ICE = 'ICE', WIND = 'WIND', STORM = 'STORM', COSMIC = 'COSMIC',
-}
-
-export enum FormId {
-  BLADE = 'BLADE', BEAM = 'BEAM', ORB = 'ORB', MINE = 'MINE', NOVA = 'NOVA',
-}
-
-export enum PrefixId {
-  HOMING = 'HOMING', SPLITTING = 'SPLITTING', GREATER = 'GREATER',
-  EXPANDING = 'EXPANDING', RETURNING = 'RETURNING', PIERCING = 'PIERCING',
-}
-
-export enum SuffixId {
-  OF_DEVOURING = 'OF DEVOURING', OF_BINDING = 'OF BINDING',
-  OF_REAPING = 'OF REAPING', OF_DETONATION = 'OF DETONATION', OF_ECHOES = 'OF ECHOES',
-}
-
+export enum CoreId { FIRE = 'FIRE', ICE = 'ICE', WIND = 'WIND', STORM = 'STORM', COSMIC = 'COSMIC' }
+export enum FormId { BLADE = 'BLADE', BEAM = 'BEAM', ORB = 'ORB', MINE = 'MINE', NOVA = 'NOVA' }
+export enum PrefixId { HOMING = 'HOMING', SPLITTING = 'SPLITTING', GREATER = 'GREATER', EXPANDING = 'EXPANDING', RETURNING = 'RETURNING', PIERCING = 'PIERCING' }
+export enum SuffixId { OF_DEVOURING = 'OF DEVOURING', OF_BINDING = 'OF BINDING', OF_REAPING = 'OF REAPING', OF_DETONATION = 'OF DETONATION', OF_ECHOES = 'OF ECHOES' }
 export type TargetingType = 'melee' | 'projectile' | 'aoe' | 'line' | 'placement';
 export type StatusEffectType = 'burn' | 'chill' | 'knockback' | 'shock' | 'gravity' | 'none';
-
-// ── Status Effect Configs ─────────────────────────────────────────────────
-
 export interface BurnConfig { type: 'burn'; damagePerSecond: number; duration: number; }
 export interface ChillConfig { type: 'chill'; slowPerStack: number; maxStacks: number; stackDuration: number; freezeDuration: number; freezeThreshold: number; }
 export interface KnockbackConfig { type: 'knockback'; force: number; duration: number; deflectProjectiles: boolean; deflectRadius: number; }
@@ -37,12 +12,8 @@ export interface ShockConfig { type: 'shock'; stunChance: number; stunDuration: 
 export interface GravityConfig { type: 'gravity'; pullRadius: number; pullForce: number; pullDuration: number; }
 export interface NoEffectConfig { type: 'none'; }
 export type StatusEffectConfig = BurnConfig | ChillConfig | KnockbackConfig | ShockConfig | GravityConfig | NoEffectConfig;
-
-// ── Visual / Audio / Behavior types (unchanged from before) ───────────────
-
 export interface VisualConfig { color: number; glowColor: number; trailColor: number; }
 export interface AudioConfig { castSound?: string; hitSound?: string; loopSound?: string; }
-
 export interface HomingBehavior { type: 'homing'; turnRate: number; trackingRange: number; }
 export interface SplittingBehavior { type: 'splitting'; splitCount: number; splitAtPercent: number; splitAngleSpread: number; splitDamagePercent: number; }
 export interface GreaterBehavior { type: 'greater'; sizeMultiplier: number; extraDamageFlat: number; }
@@ -50,203 +21,40 @@ export interface ExpandingBehavior { type: 'expanding'; startScale: number; endS
 export interface ReturningBehavior { type: 'returning'; returnSpeed: number; returnDamagePercent: number; }
 export interface PiercingBehavior { type: 'piercing'; maxPierceTargets: number; damageRetainPercent: number; }
 export type PrefixBehavior = HomingBehavior | SplittingBehavior | GreaterBehavior | ExpandingBehavior | ReturningBehavior | PiercingBehavior;
-
 export interface DevouringBehavior { type: 'devouring'; manaRestoreOnKill: number; }
 export interface BindingBehavior { type: 'binding'; bindDuration: number; bindRadius: number; }
 export interface ReapingBehavior { type: 'reaping'; seekRange: number; maxAdditionalTargets: number; seekDamagePercent: number; }
 export interface DetonationBehavior { type: 'detonation'; explosionRadius: number; explosionDamagePercent: number; canChainDetonate: boolean; }
 export interface EchoesBehavior { type: 'echoes'; echoDelay: number; echoDamageMultiplier: number; canEchoRecursively: boolean; }
 export type SuffixBehavior = DevouringBehavior | BindingBehavior | ReapingBehavior | DetonationBehavior | EchoesBehavior;
-
 export interface BladeVisual { arcAngle: number; range: number; swingDuration: number; }
 export interface BeamVisual { width: number; range: number; castDuration: number; tickInterval: number; }
 export interface OrbVisual { radius: number; speed: number; lifetime: number; damageTickInterval: number; damageRadius: number; }
 export interface MineVisual { radius: number; armDelay: number; triggerRadius: number; explosionRadius: number; lifetime: number; }
 export interface NovaVisual { radius: number; expandDuration: number; }
 export type FormVisualConfig = BladeVisual | BeamVisual | OrbVisual | MineVisual | NovaVisual;
-
-// ── Component Interfaces ──────────────────────────────────────────────────
-
-export interface CoreComponent {
-  id: CoreId; displayName: string; description: string;
-  manaCost: number; baseDamage: number;
-  statusEffect: StatusEffectConfig; visual: VisualConfig; audio: AudioConfig;
-}
-
-export interface FormComponent {
-  id: FormId; displayName: string; description: string;
-  manaCost: number; cooldown: number; targetingType: TargetingType;
-  damageMultiplier: number; formVisual: FormVisualConfig; audio: AudioConfig;
-  compatiblePrefixes: PrefixId[] | 'all'; compatibleSuffixes: SuffixId[] | 'all';
-}
-
-export interface PrefixComponent {
-  id: PrefixId; displayName: string; description: string;
-  manaCost: number; damageMultiplier: number; cooldownMultiplier: number;
-  compatibleForms: FormId[] | 'all'; compatibleCores: CoreId[] | 'all';
-  behavior: PrefixBehavior; visual: Partial<VisualConfig>; audio: AudioConfig;
-}
-
-export interface SuffixComponent {
-  id: SuffixId; displayName: string; description: string;
-  manaCost: number; damageMultiplier: number; cooldownMultiplier: number;
-  compatibleForms: FormId[] | 'all'; compatibleCores: CoreId[] | 'all';
-  behavior: SuffixBehavior; visual: Partial<VisualConfig>; audio: AudioConfig;
-}
-
-export interface CoreFormRestriction {
-  coreId: CoreId; formId: FormId; reason: string; suggestion?: string;
-}
-
+export interface CoreComponent { id: CoreId; displayName: string; description: string; manaCost: number; baseDamage: number; statusEffect: StatusEffectConfig; visual: VisualConfig; audio: AudioConfig; }
+export interface FormComponent { id: FormId; displayName: string; description: string; manaCost: number; cooldown: number; targetingType: TargetingType; damageMultiplier: number; formVisual: FormVisualConfig; audio: AudioConfig; compatiblePrefixes: PrefixId[] | 'all'; compatibleSuffixes: SuffixId[] | 'all'; }
+export interface PrefixComponent { id: PrefixId; displayName: string; description: string; manaCost: number; damageMultiplier: number; cooldownMultiplier: number; compatibleForms: FormId[] | 'all'; compatibleCores: CoreId[] | 'all'; behavior: PrefixBehavior; visual: Partial<VisualConfig>; audio: AudioConfig; }
+export interface SuffixComponent { id: SuffixId; displayName: string; description: string; manaCost: number; damageMultiplier: number; cooldownMultiplier: number; compatibleForms: FormId[] | 'all'; compatibleCores: CoreId[] | 'all'; behavior: SuffixBehavior; visual: Partial<VisualConfig>; audio: AudioConfig; }
+export interface CoreFormRestriction { coreId: CoreId; formId: FormId; reason: string; suggestion?: string; }
 export const CORE_FORM_RESTRICTIONS: CoreFormRestriction[] = [];
-
-// ═══════════════════════════════════════════════════════════════════════════
-//  BUILDER FUNCTIONS — read from BalanceManager
-// ═══════════════════════════════════════════════════════════════════════════
-
-function buildCoreRegistry(): Record<CoreId, CoreComponent> {
-  const b = BalanceManager.get();
-  return {
-    [CoreId.FIRE]: {
-      id: CoreId.FIRE, displayName: 'Fire', description: 'Burns enemies over time.',
-      manaCost: b.cores.FIRE.manaCost, baseDamage: b.cores.FIRE.baseDamage,
-      statusEffect: { type: 'burn', damagePerSecond: b.cores.FIRE.status.damagePerSecond, duration: b.cores.FIRE.status.duration },
-      visual: { color: 0xff6600, glowColor: 0xff9944, trailColor: 0xff3300 }, audio: {},
-    },
-    [CoreId.ICE]: {
-      id: CoreId.ICE, displayName: 'Ice', description: 'Stacking Chill. Max stacks = Freeze.',
-      manaCost: b.cores.ICE.manaCost, baseDamage: b.cores.ICE.baseDamage,
-      statusEffect: { type: 'chill', slowPerStack: b.cores.ICE.status.slowPerStack, maxStacks: b.cores.ICE.status.maxStacks, stackDuration: b.cores.ICE.status.stackDurationSec, freezeDuration: b.cores.ICE.status.freezeDurationSec, freezeThreshold: b.cores.ICE.status.freezeThreshold },
-      visual: { color: 0x44ccff, glowColor: 0x88ddff, trailColor: 0x2299cc }, audio: {},
-    },
-    [CoreId.WIND]: {
-      id: CoreId.WIND, displayName: 'Wind', description: 'Pushes enemies back.',
-      manaCost: b.cores.WIND.manaCost, baseDamage: b.cores.WIND.baseDamage,
-      statusEffect: { type: 'knockback', force: b.cores.WIND.status.knockbackForce, duration: b.cores.WIND.status.knockbackDurationSec, deflectProjectiles: b.cores.WIND.status.deflectProjectiles === 1, deflectRadius: b.cores.WIND.status.deflectRadius },
-      visual: { color: 0x88ffbb, glowColor: 0xbbffdd, trailColor: 0x55cc88 }, audio: {},
-    },
-    [CoreId.STORM]: {
-      id: CoreId.STORM, displayName: 'Storm', description: 'Chance to stun + arc to nearby.',
-      manaCost: b.cores.STORM.manaCost, baseDamage: b.cores.STORM.baseDamage,
-      statusEffect: { type: 'shock', stunChance: b.cores.STORM.status.stunChance, stunDuration: b.cores.STORM.status.stunDurationSec, arcRange: b.cores.STORM.status.arcRange, arcDamagePercent: b.cores.STORM.status.arcDamagePercent, maxArcTargets: b.cores.STORM.status.maxArcTargets },
-      visual: { color: 0xaa88ff, glowColor: 0xccaaff, trailColor: 0x8866dd }, audio: {},
-    },
-    [CoreId.COSMIC]: {
-      id: CoreId.COSMIC, displayName: 'Cosmic', description: 'Gravity pulls enemies inward.',
-      manaCost: b.cores.COSMIC.manaCost, baseDamage: b.cores.COSMIC.baseDamage,
-      statusEffect: { type: 'gravity', pullRadius: b.cores.COSMIC.status.pullRadius, pullForce: b.cores.COSMIC.status.pullForce, pullDuration: b.cores.COSMIC.status.pullDurationSec },
-      visual: { color: 0xdd66ff, glowColor: 0xee99ff, trailColor: 0xbb44dd }, audio: {},
-    },
-  };
-}
-
-function buildFormRegistry(): Record<FormId, FormComponent> {
-  const b = BalanceManager.get();
-  return {
-    [FormId.BLADE]: {
-      id: FormId.BLADE, displayName: 'Blade', description: 'Wide close-range melee slash.',
-      manaCost: b.forms.BLADE.manaCost, cooldown: b.forms.BLADE.cooldownMs, targetingType: 'melee',
-      damageMultiplier: b.forms.BLADE.damageMultiplier,
-      formVisual: { arcAngle: b.forms.BLADE.values.arcAngleDeg, range: b.forms.BLADE.values.range, swingDuration: b.forms.BLADE.values.swingDurationMs } as BladeVisual,
-      audio: {}, compatiblePrefixes: [PrefixId.GREATER], compatibleSuffixes: 'all',
-    },
-    [FormId.BEAM]: {
-      id: FormId.BEAM, displayName: 'Beam', description: 'Continuous line attack.',
-      manaCost: b.forms.BEAM.manaCost, cooldown: b.forms.BEAM.cooldownMs, targetingType: 'line',
-      damageMultiplier: b.forms.BEAM.damageMultiplier,
-      formVisual: { width: b.forms.BEAM.values.width, range: b.forms.BEAM.values.range, castDuration: b.forms.BEAM.values.castDurationMs, tickInterval: b.forms.BEAM.values.tickIntervalMs } as BeamVisual,
-      audio: {}, compatiblePrefixes: [PrefixId.GREATER], compatibleSuffixes: 'all',
-    },
-    [FormId.ORB]: {
-      id: FormId.ORB, displayName: 'Orb', description: 'Slow-moving damaging sphere.',
-      manaCost: b.forms.ORB.manaCost, cooldown: b.forms.ORB.cooldownMs, targetingType: 'projectile',
-      damageMultiplier: b.forms.ORB.damageMultiplier,
-      formVisual: { radius: b.forms.ORB.values.radius, speed: b.forms.ORB.values.speed, lifetime: b.forms.ORB.values.lifetimeMs, damageTickInterval: b.forms.ORB.values.damageTickIntervalMs, damageRadius: b.forms.ORB.values.damageRadius } as OrbVisual,
-      audio: {}, compatiblePrefixes: 'all', compatibleSuffixes: 'all',
-    },
-    [FormId.MINE]: {
-      id: FormId.MINE, displayName: 'Mine', description: 'Trap that detonates near enemies.',
-      manaCost: b.forms.MINE.manaCost, cooldown: b.forms.MINE.cooldownMs, targetingType: 'placement',
-      damageMultiplier: b.forms.MINE.damageMultiplier,
-      formVisual: { radius: b.forms.MINE.values.visualRadius, armDelay: b.forms.MINE.values.armDelayMs, triggerRadius: b.forms.MINE.values.triggerRadius, explosionRadius: b.forms.MINE.values.explosionRadius, lifetime: b.forms.MINE.values.lifetimeMs } as MineVisual,
-      audio: {}, compatiblePrefixes: [PrefixId.GREATER], compatibleSuffixes: 'all',
-    },
-    [FormId.NOVA]: {
-      id: FormId.NOVA, displayName: 'Nova', description: 'Radial AoE explosion.',
-      manaCost: b.forms.NOVA.manaCost, cooldown: b.forms.NOVA.cooldownMs, targetingType: 'aoe',
-      damageMultiplier: b.forms.NOVA.damageMultiplier,
-      formVisual: { radius: b.forms.NOVA.values.radius, expandDuration: b.forms.NOVA.values.expandDurationMs } as NovaVisual,
-      audio: {}, compatiblePrefixes: [PrefixId.GREATER], compatibleSuffixes: 'all',
-    },
-  };
-}
-
-function buildPrefixRegistry(): Record<PrefixId, PrefixComponent> {
-  const b = BalanceManager.get();
-  const p = b.prefixes;
-  return {
-    [PrefixId.HOMING]: { id: PrefixId.HOMING, displayName: 'Homing', description: 'Tracks nearby enemies.', manaCost: p.HOMING.manaCost, damageMultiplier: p.HOMING.damageMultiplier, cooldownMultiplier: p.HOMING.cooldownMultiplier, compatibleForms: [FormId.ORB], compatibleCores: 'all', behavior: { type: 'homing', turnRate: p.HOMING.values.turnRate, trackingRange: p.HOMING.values.trackingRange }, visual: {}, audio: {} },
-    [PrefixId.SPLITTING]: { id: PrefixId.SPLITTING, displayName: 'Splitting', description: 'Splits into 3 mid-flight.', manaCost: p.SPLITTING.manaCost, damageMultiplier: p.SPLITTING.damageMultiplier, cooldownMultiplier: p.SPLITTING.cooldownMultiplier, compatibleForms: [FormId.ORB], compatibleCores: 'all', behavior: { type: 'splitting', splitCount: p.SPLITTING.values.splitCount, splitAtPercent: p.SPLITTING.values.splitAtPercent, splitAngleSpread: p.SPLITTING.values.splitAngleSpreadDeg, splitDamagePercent: p.SPLITTING.values.splitDamagePercent }, visual: {}, audio: {} },
-    [PrefixId.GREATER]: { id: PrefixId.GREATER, displayName: 'Greater', description: 'Increases size & AoE by 50%.', manaCost: p.GREATER.manaCost, damageMultiplier: p.GREATER.damageMultiplier, cooldownMultiplier: p.GREATER.cooldownMultiplier, compatibleForms: [FormId.BLADE, FormId.BEAM, FormId.ORB, FormId.MINE, FormId.NOVA], compatibleCores: 'all', behavior: { type: 'greater', sizeMultiplier: p.GREATER.values.sizeMultiplier, extraDamageFlat: p.GREATER.values.extraDamageFlat }, visual: {}, audio: {} },
-    [PrefixId.EXPANDING]: { id: PrefixId.EXPANDING, displayName: 'Expanding', description: 'Grows as it travels.', manaCost: p.EXPANDING.manaCost, damageMultiplier: p.EXPANDING.damageMultiplier, cooldownMultiplier: p.EXPANDING.cooldownMultiplier, compatibleForms: [FormId.ORB], compatibleCores: 'all', behavior: { type: 'expanding', startScale: p.EXPANDING.values.startScale, endScale: p.EXPANDING.values.endScale, growthRate: p.EXPANDING.values.growthRate }, visual: {}, audio: {} },
-    [PrefixId.RETURNING]: { id: PrefixId.RETURNING, displayName: 'Returning', description: 'Returns to caster after travel.', manaCost: p.RETURNING.manaCost, damageMultiplier: p.RETURNING.damageMultiplier, cooldownMultiplier: p.RETURNING.cooldownMultiplier, compatibleForms: [FormId.ORB], compatibleCores: 'all', behavior: { type: 'returning', returnSpeed: p.RETURNING.values.returnSpeed, returnDamagePercent: p.RETURNING.values.returnDamagePercent }, visual: {}, audio: {} },
-    [PrefixId.PIERCING]: { id: PrefixId.PIERCING, displayName: 'Piercing', description: 'Passes through enemies.', manaCost: p.PIERCING.manaCost, damageMultiplier: p.PIERCING.damageMultiplier, cooldownMultiplier: p.PIERCING.cooldownMultiplier, compatibleForms: [FormId.ORB], compatibleCores: 'all', behavior: { type: 'piercing', maxPierceTargets: p.PIERCING.values.maxPierceTargets, damageRetainPercent: p.PIERCING.values.damageRetainPercent }, visual: {}, audio: {} },
-  };
-}
-
-function buildSuffixRegistry(): Record<SuffixId, SuffixComponent> {
-  const b = BalanceManager.get();
-  const s = b.suffixes;
-  return {
-    [SuffixId.OF_DEVOURING]: { id: SuffixId.OF_DEVOURING, displayName: 'of Devouring', description: 'Kills restore mana.', manaCost: s['OF DEVOURING'].manaCost, damageMultiplier: s['OF DEVOURING'].damageMultiplier, cooldownMultiplier: s['OF DEVOURING'].cooldownMultiplier, compatibleForms: 'all', compatibleCores: 'all', behavior: { type: 'devouring', manaRestoreOnKill: s['OF DEVOURING'].values.manaRestoreOnKill }, visual: {}, audio: {} },
-    [SuffixId.OF_BINDING]: { id: SuffixId.OF_BINDING, displayName: 'of Binding', description: 'Roots enemies in place.', manaCost: s['OF BINDING'].manaCost, damageMultiplier: s['OF BINDING'].damageMultiplier, cooldownMultiplier: s['OF BINDING'].cooldownMultiplier, compatibleForms: 'all', compatibleCores: 'all', behavior: { type: 'binding', bindDuration: s['OF BINDING'].values.bindDurationSec, bindRadius: s['OF BINDING'].values.bindRadius }, visual: {}, audio: {} },
-    [SuffixId.OF_REAPING]: { id: SuffixId.OF_REAPING, displayName: 'of Reaping', description: 'Kill triggers seek to next enemy.', manaCost: s['OF REAPING'].manaCost, damageMultiplier: s['OF REAPING'].damageMultiplier, cooldownMultiplier: s['OF REAPING'].cooldownMultiplier, compatibleForms: 'all', compatibleCores: 'all', behavior: { type: 'reaping', seekRange: s['OF REAPING'].values.seekRange, maxAdditionalTargets: s['OF REAPING'].values.maxAdditionalTargets, seekDamagePercent: s['OF REAPING'].values.seekDamagePercent }, visual: {}, audio: {} },
-    [SuffixId.OF_DETONATION]: { id: SuffixId.OF_DETONATION, displayName: 'of Detonation', description: 'Killed enemies explode.', manaCost: s['OF DETONATION'].manaCost, damageMultiplier: s['OF DETONATION'].damageMultiplier, cooldownMultiplier: s['OF DETONATION'].cooldownMultiplier, compatibleForms: 'all', compatibleCores: 'all', behavior: { type: 'detonation', explosionRadius: s['OF DETONATION'].values.explosionRadius, explosionDamagePercent: s['OF DETONATION'].values.explosionDamagePercent, canChainDetonate: s['OF DETONATION'].values.canChainDetonate === 1 }, visual: {}, audio: {} },
-    [SuffixId.OF_ECHOES]: { id: SuffixId.OF_ECHOES, displayName: 'of Echoes', description: 'Spell repeats at reduced power.', manaCost: s['OF ECHOES'].manaCost, damageMultiplier: s['OF ECHOES'].damageMultiplier, cooldownMultiplier: s['OF ECHOES'].cooldownMultiplier, compatibleForms: 'all', compatibleCores: 'all', behavior: { type: 'echoes', echoDelay: s['OF ECHOES'].values.echoDelayMs, echoDamageMultiplier: s['OF ECHOES'].values.echoDamageMultiplier, canEchoRecursively: s['OF ECHOES'].values.canEchoRecursively === 1 }, visual: {}, audio: {} },
-  };
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-//  LIVE REGISTRIES — rebuilt when balance changes
-// ═══════════════════════════════════════════════════════════════════════════
-
+function buildCoreRegistry(): Record<CoreId, CoreComponent> { const b = BalanceManager.get(); return { [CoreId.FIRE]: { id: CoreId.FIRE, displayName: 'Fire', description: 'Burns enemies over time.', manaCost: b.cores.FIRE.manaCost, baseDamage: b.cores.FIRE.baseDamage, statusEffect: { type: 'burn', damagePerSecond: b.cores.FIRE.status.damagePerSecond, duration: b.cores.FIRE.status.duration }, visual: { color: 0xff6600, glowColor: 0xff9944, trailColor: 0xff3300 }, audio: {} }, [CoreId.ICE]: { id: CoreId.ICE, displayName: 'Ice', description: 'Stacking Chill. Max stacks = Freeze.', manaCost: b.cores.ICE.manaCost, baseDamage: b.cores.ICE.baseDamage, statusEffect: { type: 'chill', slowPerStack: b.cores.ICE.status.slowPerStack, maxStacks: b.cores.ICE.status.maxStacks, stackDuration: b.cores.ICE.status.stackDurationSec, freezeDuration: b.cores.ICE.status.freezeDurationSec, freezeThreshold: b.cores.ICE.status.freezeThreshold }, visual: { color: 0x44ccff, glowColor: 0x88ddff, trailColor: 0x2299cc }, audio: {} }, [CoreId.WIND]: { id: CoreId.WIND, displayName: 'Wind', description: 'Pushes enemies back.', manaCost: b.cores.WIND.manaCost, baseDamage: b.cores.WIND.baseDamage, statusEffect: { type: 'knockback', force: b.cores.WIND.status.knockbackForce, duration: b.cores.WIND.status.knockbackDurationSec, deflectProjectiles: b.cores.WIND.status.deflectProjectiles === 1, deflectRadius: b.cores.WIND.status.deflectRadius }, visual: { color: 0x88ffbb, glowColor: 0xbbffdd, trailColor: 0x55cc88 }, audio: {} }, [CoreId.STORM]: { id: CoreId.STORM, displayName: 'Storm', description: 'Chance to stun + arc to nearby.', manaCost: b.cores.STORM.manaCost, baseDamage: b.cores.STORM.baseDamage, statusEffect: { type: 'shock', stunChance: b.cores.STORM.status.stunChance, stunDuration: b.cores.STORM.status.stunDurationSec, arcRange: b.cores.STORM.status.arcRange, arcDamagePercent: b.cores.STORM.status.arcDamagePercent, maxArcTargets: b.cores.STORM.status.maxArcTargets }, visual: { color: 0xaa88ff, glowColor: 0xccaaff, trailColor: 0x8866dd }, audio: {} }, [CoreId.COSMIC]: { id: CoreId.COSMIC, displayName: 'Cosmic', description: 'Gravity pulls enemies inward.', manaCost: b.cores.COSMIC.manaCost, baseDamage: b.cores.COSMIC.baseDamage, statusEffect: { type: 'gravity', pullRadius: b.cores.COSMIC.status.pullRadius, pullForce: b.cores.COSMIC.status.pullForce, pullDuration: b.cores.COSMIC.status.pullDurationSec }, visual: { color: 0xdd66ff, glowColor: 0xee99ff, trailColor: 0xbb44dd }, audio: {} } }; }
+function buildFormRegistry(): Record<FormId, FormComponent> { const b = BalanceManager.get(); return { [FormId.BLADE]: { id: FormId.BLADE, displayName: 'Blade', description: 'Wide close-range melee slash.', manaCost: b.forms.BLADE.manaCost, cooldown: b.forms.BLADE.cooldownMs, targetingType: 'melee', damageMultiplier: b.forms.BLADE.damageMultiplier, formVisual: { arcAngle: b.forms.BLADE.values.arcAngleDeg, range: b.forms.BLADE.values.range, swingDuration: b.forms.BLADE.values.swingDurationMs } as BladeVisual, audio: {}, compatiblePrefixes: [PrefixId.GREATER], compatibleSuffixes: 'all' }, [FormId.BEAM]: { id: FormId.BEAM, displayName: 'Beam', description: 'Continuous line attack.', manaCost: b.forms.BEAM.manaCost, cooldown: b.forms.BEAM.cooldownMs, targetingType: 'line', damageMultiplier: b.forms.BEAM.damageMultiplier, formVisual: { width: b.forms.BEAM.values.width, range: b.forms.BEAM.values.range, castDuration: b.forms.BEAM.values.castDurationMs, tickInterval: b.forms.BEAM.values.tickIntervalMs } as BeamVisual, audio: {}, compatiblePrefixes: [PrefixId.GREATER], compatibleSuffixes: 'all' }, [FormId.ORB]: { id: FormId.ORB, displayName: 'Orb', description: 'Slow-moving damaging sphere.', manaCost: b.forms.ORB.manaCost, cooldown: b.forms.ORB.cooldownMs, targetingType: 'projectile', damageMultiplier: b.forms.ORB.damageMultiplier, formVisual: { radius: b.forms.ORB.values.radius, speed: b.forms.ORB.values.speed, lifetime: b.forms.ORB.values.lifetimeMs, damageTickInterval: b.forms.ORB.values.damageTickIntervalMs, damageRadius: b.forms.ORB.values.damageRadius } as OrbVisual, audio: {}, compatiblePrefixes: 'all', compatibleSuffixes: 'all' }, [FormId.MINE]: { id: FormId.MINE, displayName: 'Mine', description: 'Trap that detonates near enemies.', manaCost: b.forms.MINE.manaCost, cooldown: b.forms.MINE.cooldownMs, targetingType: 'placement', damageMultiplier: b.forms.MINE.damageMultiplier, formVisual: { radius: b.forms.MINE.values.visualRadius, armDelay: b.forms.MINE.values.armDelayMs, triggerRadius: b.forms.MINE.values.triggerRadius, explosionRadius: b.forms.MINE.values.explosionRadius, lifetime: b.forms.MINE.values.lifetimeMs } as MineVisual, audio: {}, compatiblePrefixes: [PrefixId.GREATER], compatibleSuffixes: 'all' }, [FormId.NOVA]: { id: FormId.NOVA, displayName: 'Nova', description: 'Radial AoE explosion.', manaCost: b.forms.NOVA.manaCost, cooldown: b.forms.NOVA.cooldownMs, targetingType: 'aoe', damageMultiplier: b.forms.NOVA.damageMultiplier, formVisual: { radius: b.forms.NOVA.values.radius, expandDuration: b.forms.NOVA.values.expandDurationMs } as NovaVisual, audio: {}, compatiblePrefixes: [PrefixId.GREATER], compatibleSuffixes: 'all' } }; }
+function buildPrefixRegistry(): Record<PrefixId, PrefixComponent> { const b = BalanceManager.get(); const p = b.prefixes; return { [PrefixId.HOMING]: { id: PrefixId.HOMING, displayName: 'Homing', description: 'Tracks nearby enemies.', manaCost: p.HOMING.manaCost, damageMultiplier: p.HOMING.damageMultiplier, cooldownMultiplier: p.HOMING.cooldownMultiplier, compatibleForms: [FormId.ORB], compatibleCores: 'all', behavior: { type: 'homing', turnRate: p.HOMING.values.turnRate, trackingRange: p.HOMING.values.trackingRange }, visual: {}, audio: {} }, [PrefixId.SPLITTING]: { id: PrefixId.SPLITTING, displayName: 'Splitting', description: 'Splits into 3 mid-flight.', manaCost: p.SPLITTING.manaCost, damageMultiplier: p.SPLITTING.damageMultiplier, cooldownMultiplier: p.SPLITTING.cooldownMultiplier, compatibleForms: [FormId.ORB], compatibleCores: 'all', behavior: { type: 'splitting', splitCount: p.SPLITTING.values.splitCount, splitAtPercent: p.SPLITTING.values.splitAtPercent, splitAngleSpread: p.SPLITTING.values.splitAngleSpreadDeg, splitDamagePercent: p.SPLITTING.values.splitDamagePercent }, visual: {}, audio: {} }, [PrefixId.GREATER]: { id: PrefixId.GREATER, displayName: 'Greater', description: 'Increases size & AoE by 50%.', manaCost: p.GREATER.manaCost, damageMultiplier: p.GREATER.damageMultiplier, cooldownMultiplier: p.GREATER.cooldownMultiplier, compatibleForms: [FormId.BLADE, FormId.BEAM, FormId.ORB, FormId.MINE, FormId.NOVA], compatibleCores: 'all', behavior: { type: 'greater', sizeMultiplier: p.GREATER.values.sizeMultiplier, extraDamageFlat: p.GREATER.values.extraDamageFlat }, visual: {}, audio: {} }, [PrefixId.EXPANDING]: { id: PrefixId.EXPANDING, displayName: 'Expanding', description: 'Grows as it travels.', manaCost: p.EXPANDING.manaCost, damageMultiplier: p.EXPANDING.damageMultiplier, cooldownMultiplier: p.EXPANDING.cooldownMultiplier, compatibleForms: [FormId.ORB], compatibleCores: 'all', behavior: { type: 'expanding', startScale: p.EXPANDING.values.startScale, endScale: p.EXPANDING.values.endScale, growthRate: p.EXPANDING.values.growthRate }, visual: {}, audio: {} }, [PrefixId.RETURNING]: { id: PrefixId.RETURNING, displayName: 'Returning', description: 'Returns to caster after travel.', manaCost: p.RETURNING.manaCost, damageMultiplier: p.RETURNING.damageMultiplier, cooldownMultiplier: p.RETURNING.cooldownMultiplier, compatibleForms: [FormId.ORB], compatibleCores: 'all', behavior: { type: 'returning', returnSpeed: p.RETURNING.values.returnSpeed, returnDamagePercent: p.RETURNING.values.returnDamagePercent }, visual: {}, audio: {} }, [PrefixId.PIERCING]: { id: PrefixId.PIERCING, displayName: 'Piercing', description: 'Passes through enemies.', manaCost: p.PIERCING.manaCost, damageMultiplier: p.PIERCING.damageMultiplier, cooldownMultiplier: p.PIERCING.cooldownMultiplier, compatibleForms: [FormId.ORB], compatibleCores: 'all', behavior: { type: 'piercing', maxPierceTargets: p.PIERCING.values.maxPierceTargets, damageRetainPercent: p.PIERCING.values.damageRetainPercent }, visual: {}, audio: {} } }; }
+function buildSuffixRegistry(): Record<SuffixId, SuffixComponent> { const b = BalanceManager.get(); const s = b.suffixes; return { [SuffixId.OF_DEVOURING]: { id: SuffixId.OF_DEVOURING, displayName: 'of Devouring', description: 'Kills restore mana.', manaCost: s['OF DEVOURING'].manaCost, damageMultiplier: s['OF DEVOURING'].damageMultiplier, cooldownMultiplier: s['OF DEVOURING'].cooldownMultiplier, compatibleForms: 'all', compatibleCores: 'all', behavior: { type: 'devouring', manaRestoreOnKill: s['OF DEVOURING'].values.manaRestoreOnKill }, visual: {}, audio: {} }, [SuffixId.OF_BINDING]: { id: SuffixId.OF_BINDING, displayName: 'of Binding', description: 'Roots enemies in place.', manaCost: s['OF BINDING'].manaCost, damageMultiplier: s['OF BINDING'].damageMultiplier, cooldownMultiplier: s['OF BINDING'].cooldownMultiplier, compatibleForms: 'all', compatibleCores: 'all', behavior: { type: 'binding', bindDuration: s['OF BINDING'].values.bindDurationSec, bindRadius: s['OF BINDING'].values.bindRadius }, visual: {}, audio: {} }, [SuffixId.OF_REAPING]: { id: SuffixId.OF_REAPING, displayName: 'of Reaping', description: 'Kill triggers seek to next enemy.', manaCost: s['OF REAPING'].manaCost, damageMultiplier: s['OF REAPING'].damageMultiplier, cooldownMultiplier: s['OF REAPING'].cooldownMultiplier, compatibleForms: 'all', compatibleCores: 'all', behavior: { type: 'reaping', seekRange: s['OF REAPING'].values.seekRange, maxAdditionalTargets: s['OF REAPING'].values.maxAdditionalTargets, seekDamagePercent: s['OF REAPING'].values.seekDamagePercent }, visual: {}, audio: {} }, [SuffixId.OF_DETONATION]: { id: SuffixId.OF_DETONATION, displayName: 'of Detonation', description: 'Killed enemies explode.', manaCost: s['OF DETONATION'].manaCost, damageMultiplier: s['OF DETONATION'].damageMultiplier, cooldownMultiplier: s['OF DETONATION'].cooldownMultiplier, compatibleForms: 'all', compatibleCores: 'all', behavior: { type: 'detonation', explosionRadius: s['OF DETONATION'].values.explosionRadius, explosionDamagePercent: s['OF DETONATION'].values.explosionDamagePercent, canChainDetonate: s['OF DETONATION'].values.canChainDetonate === 1 }, visual: {}, audio: {} }, [SuffixId.OF_ECHOES]: { id: SuffixId.OF_ECHOES, displayName: 'of Echoes', description: 'Spell repeats at reduced power.', manaCost: s['OF ECHOES'].manaCost, damageMultiplier: s['OF ECHOES'].damageMultiplier, cooldownMultiplier: s['OF ECHOES'].cooldownMultiplier, compatibleForms: 'all', compatibleCores: 'all', behavior: { type: 'echoes', echoDelay: s['OF ECHOES'].values.echoDelayMs, echoDamageMultiplier: s['OF ECHOES'].values.echoDamageMultiplier, canEchoRecursively: s['OF ECHOES'].values.canEchoRecursively === 1 }, visual: {}, audio: {} } }; }
 export let CORE_REGISTRY = buildCoreRegistry();
 export let FORM_REGISTRY = buildFormRegistry();
 export let PREFIX_REGISTRY = buildPrefixRegistry();
 export let SUFFIX_REGISTRY = buildSuffixRegistry();
-
-// Rebuild registries when balance data changes
-BalanceManager.onChange(() => {
-  CORE_REGISTRY = buildCoreRegistry();
-  FORM_REGISTRY = buildFormRegistry();
-  PREFIX_REGISTRY = buildPrefixRegistry();
-  SUFFIX_REGISTRY = buildSuffixRegistry();
-});
-
-// ═══════════════════════════════════════════════════════════════════════════
-//  LOOKUP FUNCTIONS
-// ═══════════════════════════════════════════════════════════════════════════
-
+BalanceManager.onChange(() => { CORE_REGISTRY = buildCoreRegistry(); FORM_REGISTRY = buildFormRegistry(); PREFIX_REGISTRY = buildPrefixRegistry(); SUFFIX_REGISTRY = buildSuffixRegistry(); });
 export function getCore(id: CoreId): CoreComponent { return CORE_REGISTRY[id]; }
 export function getForm(id: FormId): FormComponent { return FORM_REGISTRY[id]; }
 export function getPrefix(id: PrefixId): PrefixComponent { return PREFIX_REGISTRY[id]; }
 export function getSuffix(id: SuffixId): SuffixComponent { return SUFFIX_REGISTRY[id]; }
-
 export function getAllCoreIds(): CoreId[] { return Object.keys(CORE_REGISTRY) as CoreId[]; }
 export function getAllFormIds(): FormId[] { return Object.keys(FORM_REGISTRY) as FormId[]; }
 export function getAllPrefixIds(): PrefixId[] { return Object.keys(PREFIX_REGISTRY) as PrefixId[]; }
 export function getAllSuffixIds(): SuffixId[] { return Object.keys(SUFFIX_REGISTRY) as SuffixId[]; }
-
-export function identifyWord(word: string): { type: 'core' | 'form' | 'prefix' | 'suffix'; id: string } | null {
-  const upper = word.toUpperCase();
-  if (upper in CORE_REGISTRY) return { type: 'core', id: upper };
-  if (upper in FORM_REGISTRY) return { type: 'form', id: upper };
-  if (upper in PREFIX_REGISTRY) return { type: 'prefix', id: upper };
-  return null;
-}
-
-export function identifySuffix(words: string): { type: 'suffix'; id: string } | null {
-  const upper = words.toUpperCase();
-  if (upper in SUFFIX_REGISTRY) return { type: 'suffix', id: upper };
-  return null;
-}
+export function identifyWord(word: string): { type: 'core' | 'form' | 'prefix' | 'suffix'; id: string } | null { const upper = word.toUpperCase(); if (upper in CORE_REGISTRY) return { type: 'core', id: upper }; if (upper in FORM_REGISTRY) return { type: 'form', id: upper }; if (upper in PREFIX_REGISTRY) return { type: 'prefix', id: upper }; return null; }
+export function identifySuffix(words: string): { type: 'suffix'; id: string } | null { const upper = words.toUpperCase(); if (upper in SUFFIX_REGISTRY) return { type: 'suffix', id: upper }; return null; }

@@ -1,20 +1,18 @@
 // src/systems/CoreEffectExecutor.ts
+//
+// Core hit → increment buildup on the BuildupSystem.
+// NO direct status application. Status only fires when buildup completes.
+// The BuildupSystem calls back into activateStatus() when threshold is reached.
 
 import Phaser from 'phaser';
 import { Spell } from './SpellBuilder';
-import {
-  BurnConfig,
-  ChillConfig,
-  KnockbackConfig,
-  ShockConfig,
-  GravityConfig,
-} from '../config/spellComponents';
+import { CoreId } from '../config/spellComponents';
 import { Enemy } from '../entities/Enemy';
 import { StatusEffectSystem } from './StatusEffectSystem';
-import {
-  CHILL_TINT, FREEZE_TINT, ENEMY_RADIUS,
-} from '../config/constants';
+import { BuildupSystem } from './BuildupSystem';
+import { ENEMY_RADIUS } from '../config/constants';
 import { getCoreTheme } from '../visuals/CoreVisualTheme';
+import { BalanceManager } from './BalanceManager';
 
 export interface EffectContext {
   scene: Phaser.Scene;
@@ -23,337 +21,303 @@ export interface EffectContext {
   sourceY: number;
   enemies: Enemy[];
   statusEffects: StatusEffectSystem;
+  buildupSystem: BuildupSystem;
   castId: number;
-  onKillCallback?: (enemy: Enemy) => void;
 }
 
 export class CoreEffectExecutor {
 
+  /**
+   * Called on every Core spell hit.
+   * Adds buildup — does NOT directly apply status.
+   */
   static apply(ctx: EffectContext, enemy: Enemy): void {
     if (!enemy.alive) return;
-    const effect = ctx.spell.statusEffect;
 
-    switch (effect.type) {
-      case 'burn':
-        CoreEffectExecutor.applyBurn(ctx, enemy, effect as BurnConfig);
+    const coreId = ctx.spell.core.id;
+    const theme = getCoreTheme(coreId);
+
+    // Small core-themed impact VFX on every hit (scaled by tier, handled by CombatFX)
+    theme.renderImpact(ctx.scene, enemy.sprite.x, enemy.sprite.y, ctx.spell.visual, 12);
+
+    // Increment buildup — BuildupSystem handles threshold check and activation callback
+    ctx.buildupSystem.addBuildup(
+      enemy, coreId,
+      ctx.sourceX, ctx.sourceY,
+      ctx.enemies, ctx.castId,
+    );
+  }
+
+  /**
+   * Called by BuildupSystem when a Core's buildup reaches threshold.
+   * THIS is where the actual status effect gets applied.
+   */
+  static activateStatus(
+    scene: Phaser.Scene,
+    enemy: Enemy,
+    coreId: CoreId,
+    sourceX: number,
+    sourceY: number,
+    enemies: Enemy[],
+    castId: number,
+    statusEffects: StatusEffectSystem,
+  ): void {
+    if (!enemy.alive) return;
+
+    const bal = BalanceManager.core(coreId);
+    const theme = getCoreTheme(coreId);
+
+    // Strong activation impact
+    theme.renderImpact(scene, enemy.sprite.x, enemy.sprite.y, {
+      color: theme.getGlowConfig().color,
+      glowColor: theme.getGlowConfig().color,
+      trailColor: theme.getGlowConfig().color,
+    }, 25);
+
+    switch (coreId) {
+      case CoreId.FIRE:
+        CoreEffectExecutor.activateBurn(scene, enemy, bal, statusEffects, castId, theme);
         break;
-      case 'chill':
-        CoreEffectExecutor.applyChill(ctx, enemy, effect as ChillConfig);
+      case CoreId.ICE:
+        CoreEffectExecutor.activateFreeze(scene, enemy, bal, theme);
         break;
-      case 'knockback':
-        CoreEffectExecutor.applyKnockback(ctx, enemy, effect as KnockbackConfig);
+      case CoreId.WIND:
+        CoreEffectExecutor.activateKnockback(scene, enemy, bal, sourceX, sourceY, theme);
         break;
-      case 'shock':
-        CoreEffectExecutor.applyShock(ctx, enemy, effect as ShockConfig);
+      case CoreId.STORM:
+        CoreEffectExecutor.activateShock(scene, enemy, bal, enemies, castId, theme);
         break;
-      case 'gravity':
-        CoreEffectExecutor.applyGravity(ctx, enemy, effect as GravityConfig);
-        break;
-      case 'none':
+      case CoreId.COSMIC:
+        CoreEffectExecutor.activateGravity(scene, enemy, bal, enemies, theme);
         break;
     }
   }
 
-  // ── BURN ────────────────────────────────────────────────────────────────
+  // ── FIRE: Burn DOT ────────────────────────────────────────────────────
 
-  private static applyBurn(ctx: EffectContext, enemy: Enemy, cfg: BurnConfig): void {
-    const theme = getCoreTheme(ctx.spell.core.id);
+  private static activateBurn(
+    scene: Phaser.Scene, enemy: Enemy, bal: any,
+    statusEffects: StatusEffectSystem, castId: number, theme: any,
+  ): void {
+    const dps = bal.status.damagePerSecond ?? 8;
+    const dur = bal.status.durationSec ?? 3;
 
-    // Visual hit feedback
-    theme.renderImpact(ctx.scene, enemy.sprite.x, enemy.sprite.y, ctx.spell.visual, 15);
+    statusEffects.applyBurn(enemy, dps, dur, { castId });
 
-    ctx.statusEffects.applyBurn(enemy, cfg.damagePerSecond, cfg.duration, { castId: ctx.castId });
-
-    // Ongoing burn visuals on the enemy
-    const burnVisualTimer = ctx.scene.time.addEvent({
-      delay: 180,
-      repeat: Math.floor((cfg.duration * 1000) / 180),
+    // Persistent burn particles while burning
+    const bvt = scene.time.addEvent({
+      delay: 180, repeat: Math.floor((dur * 1000) / 180),
       callback: () => {
-        if (!enemy.alive || !enemy.sprite.active) {
-          burnVisualTimer.destroy();
-          return;
-        }
-        theme.renderStatusOnEnemy(ctx.scene, enemy.sprite.x, enemy.sprite.y, ctx.spell.visual);
+        if (!enemy.alive || !enemy.sprite.active) { bvt.destroy(); return; }
+        theme.renderStatusOnEnemy(scene, enemy.sprite.x, enemy.sprite.y, {
+          color: 0xff6600, glowColor: 0xff9944, trailColor: 0xff3300,
+        });
       },
     });
   }
 
-  // ── CHILL ───────────────────────────────────────────────────────────────
+  // ── ICE: Freeze (full stop) ───────────────────────────────────────────
 
-  private static applyChill(ctx: EffectContext, enemy: Enemy, cfg: ChillConfig): void {
-    if (!enemy.alive) return;
-    const scene = ctx.scene;
-    const theme = getCoreTheme(ctx.spell.core.id);
+  private static activateFreeze(
+    scene: Phaser.Scene, enemy: Enemy, bal: any, theme: any,
+  ): void {
+    const dur = bal.status.freezeDurationSec ?? 2;
 
-    // Hit feedback
-    theme.renderImpact(scene, enemy.sprite.x, enemy.sprite.y, ctx.spell.visual, 15);
+    enemy.isFrozen = true;
+    enemy.setSpeedMultiplier(0);
+    enemy.sprite.setTint(0x4466cc);
 
-    // Read or initialize chill stacks
-    let stacks: number = enemy.sprite.getData('chillStacks') || 0;
-    stacks = Math.min(stacks + 1, cfg.maxStacks);
-    enemy.sprite.setData('chillStacks', stacks);
+    // Freeze ring
+    const fr = scene.add.circle(enemy.sprite.x, enemy.sprite.y, ENEMY_RADIUS + 8, 0x4466cc, 0.3)
+      .setDepth(8).setStrokeStyle(2, 0x4466cc, 0.6);
 
-    // Clear previous stack timer
-    const prevTimer = enemy.sprite.getData('chillTimer') as Phaser.Time.TimerEvent | undefined;
-    if (prevTimer) prevTimer.destroy();
+    const fvt = scene.time.addEvent({
+      delay: 150, loop: true,
+      callback: () => {
+        if (!enemy.alive || !enemy.isFrozen) return;
+        theme.renderStatusOnEnemy(scene, enemy.sprite.x, enemy.sprite.y, {
+          color: 0x44ccff, glowColor: 0x88ddff, trailColor: 0x2299cc,
+        }, 4);
+        fr.setPosition(enemy.sprite.x, enemy.sprite.y);
+      },
+    });
 
-    // Clear previous chill visual timer
-    const prevVisTimer = enemy.sprite.getData('chillVisualTimer') as Phaser.Time.TimerEvent | undefined;
-    if (prevVisTimer) prevVisTimer.destroy();
-
-    if (stacks >= cfg.freezeThreshold) {
-      // FREEZE
-      enemy.isFrozen = true;
-      enemy.sprite.setTint(FREEZE_TINT);
-      enemy.setSpeedMultiplier(0);
-      enemy.sprite.setData('chillStacks', 0);
-
-      // Freeze visual — ice ring
-      const freezeRing = scene.add.circle(
-        enemy.sprite.x, enemy.sprite.y,
-        ENEMY_RADIUS + 8, FREEZE_TINT, 0.3
-      ).setDepth(8).setStrokeStyle(2, FREEZE_TINT, 0.6);
-
-      // Ice crystal visuals on frozen enemy
-      const freezeVisTimer = scene.time.addEvent({
-        delay: 150, loop: true,
-        callback: () => {
-          if (!enemy.alive || !enemy.isFrozen) return;
-          theme.renderStatusOnEnemy(scene, enemy.sprite.x, enemy.sprite.y, ctx.spell.visual, 4);
-          freezeRing.setPosition(enemy.sprite.x, enemy.sprite.y);
-        },
-      });
-
-      scene.time.delayedCall(cfg.freezeDuration * 1000, () => {
-        enemy.isFrozen = false;
-        enemy.setSpeedMultiplier(1);
-        if (enemy.sprite.active) enemy.sprite.clearTint();
-        freezeRing.destroy();
-        freezeVisTimer.destroy();
-
-        // Shatter effect
-        theme.renderImpact(scene, enemy.sprite.x, enemy.sprite.y, ctx.spell.visual, 25);
-      });
-    } else {
-      // Slow based on stacks
-      const slowAmount = stacks * cfg.slowPerStack;
-      enemy.setSpeedMultiplier(1 - slowAmount);
-      enemy.sprite.setTint(CHILL_TINT);
-
-      // Ongoing chill visuals proportional to stacks
-      const chillVisTimer = scene.time.addEvent({
-        delay: 250, loop: true,
-        callback: () => {
-          if (!enemy.alive || !enemy.sprite.active) {
-            chillVisTimer.destroy();
-            return;
-          }
-          const currentStacks: number = enemy.sprite.getData('chillStacks') || 0;
-          if (currentStacks > 0) {
-            theme.renderStatusOnEnemy(scene, enemy.sprite.x, enemy.sprite.y, ctx.spell.visual, currentStacks);
-          }
-        },
-      });
-      enemy.sprite.setData('chillVisualTimer', chillVisTimer);
-
-      const timer = scene.time.delayedCall(cfg.stackDuration * 1000, () => {
-        const currentStacks: number = enemy.sprite.getData('chillStacks') || 0;
-        if (currentStacks > 0) {
-          enemy.sprite.setData('chillStacks', currentStacks - 1);
-          const remaining = currentStacks - 1;
-          if (remaining <= 0) {
-            enemy.setSpeedMultiplier(1);
-            if (enemy.sprite.active) enemy.sprite.clearTint();
-            chillVisTimer.destroy();
-          } else {
-            enemy.setSpeedMultiplier(1 - remaining * cfg.slowPerStack);
-          }
-        }
-      });
-      enemy.sprite.setData('chillTimer', timer);
-    }
+    scene.time.delayedCall(dur * 1000, () => {
+      enemy.isFrozen = false;
+      enemy.setSpeedMultiplier(1);
+      if (enemy.sprite.active) enemy.sprite.clearTint();
+      fr.destroy();
+      fvt.destroy();
+      // Shatter effect on thaw
+      theme.renderImpact(scene, enemy.sprite.x, enemy.sprite.y, {
+        color: 0x44ccff, glowColor: 0x88ddff, trailColor: 0x2299cc,
+      }, 25);
+    });
   }
 
-  // ── KNOCKBACK ───────────────────────────────────────────────────────────
+  // ── WIND: Knockback ───────────────────────────────────────────────────
 
-  private static applyKnockback(ctx: EffectContext, enemy: Enemy, cfg: KnockbackConfig): void {
-    const theme = getCoreTheme(ctx.spell.core.id);
-    const angle = Phaser.Math.Angle.Between(
-      ctx.sourceX, ctx.sourceY, enemy.sprite.x, enemy.sprite.y
-    );
-    enemy.applyKnockback(angle, cfg.force, cfg.duration);
+  private static activateKnockback(
+    scene: Phaser.Scene, enemy: Enemy, bal: any,
+    sourceX: number, sourceY: number, theme: any,
+  ): void {
+    const force = bal.status.knockbackForce ?? 350;
+    const dur = bal.status.knockbackDurationSec ?? 0.4;
 
-    // Visual: impact at enemy position
-    theme.renderImpact(ctx.scene, enemy.sprite.x, enemy.sprite.y, ctx.spell.visual, 20);
+    const angle = Phaser.Math.Angle.Between(sourceX, sourceY, enemy.sprite.x, enemy.sprite.y);
+    enemy.applyKnockback(angle, force, dur);
 
-    // Visual: directional arc from source to enemy
-    theme.renderArc(
-      ctx.scene,
-      ctx.sourceX, ctx.sourceY,
-      enemy.sprite.x, enemy.sprite.y,
-      ctx.spell.visual,
-    );
+    theme.renderImpact(scene, enemy.sprite.x, enemy.sprite.y, {
+      color: 0x88ffbb, glowColor: 0xbbffdd, trailColor: 0x55cc88,
+    }, 20);
 
-    // Wind trail behind the knocked-back enemy
-    const trailTimer = ctx.scene.time.addEvent({
-      delay: 40,
-      repeat: Math.floor((cfg.duration * 1000) / 40),
+    theme.renderArc(scene, sourceX, sourceY, enemy.sprite.x, enemy.sprite.y, {
+      color: 0x88ffbb, glowColor: 0xbbffdd, trailColor: 0x55cc88,
+    });
+
+    // Wind trail during knockback
+    const tt = scene.time.addEvent({
+      delay: 40, repeat: Math.floor((dur * 1000) / 40),
       callback: () => {
         if (!enemy.alive || !enemy.sprite.active) return;
-        theme.renderStatusOnEnemy(
-          ctx.scene, enemy.sprite.x, enemy.sprite.y, ctx.spell.visual
-        );
+        theme.renderStatusOnEnemy(scene, enemy.sprite.x, enemy.sprite.y, {
+          color: 0x88ffbb, glowColor: 0xbbffdd, trailColor: 0x55cc88,
+        });
       },
     });
   }
 
-  // ── SHOCK ───────────────────────────────────────────────────────────────
+  // ── STORM: Shock (stun + chain arcs) ──────────────────────────────────
 
-  private static applyShock(ctx: EffectContext, enemy: Enemy, cfg: ShockConfig): void {
-    const scene = ctx.scene;
-    const theme = getCoreTheme(ctx.spell.core.id);
+  private static activateShock(
+    scene: Phaser.Scene, enemy: Enemy, bal: any,
+    enemies: Enemy[], castId: number, theme: any,
+  ): void {
+    const stunDur = bal.status.stunDurationSec ?? 1.0;
+    const arcRange = bal.status.arcRange ?? 120;
+    const arcDmgPct = bal.status.arcDamagePercent ?? 0.3;
+    const maxArcs = bal.status.maxArcTargets ?? 2;
 
-    // Impact visual
-    theme.renderImpact(scene, enemy.sprite.x, enemy.sprite.y, ctx.spell.visual, 18);
+    // Stun the primary target
+    enemy.isStunned = true;
+    enemy.sprite.setTint(0xaa88ff);
 
-    // Stun chance
-    if (Math.random() < cfg.stunChance) {
-      enemy.isStunned = true;
-      enemy.sprite.setTint(0xaa88ff);
+    const svt = scene.time.addEvent({
+      delay: 100, repeat: Math.floor((stunDur * 1000) / 100),
+      callback: () => {
+        if (!enemy.alive || !enemy.sprite.active) return;
+        theme.renderStatusOnEnemy(scene, enemy.sprite.x, enemy.sprite.y, {
+          color: 0xaa88ff, glowColor: 0xccaaff, trailColor: 0x8866dd,
+        });
+      },
+    });
 
-      // Stun sparks on enemy
-      const stunVisTimer = scene.time.addEvent({
-        delay: 100,
-        repeat: Math.floor((cfg.stunDuration * 1000) / 100),
-        callback: () => {
-          if (!enemy.alive || !enemy.sprite.active) return;
-          theme.renderStatusOnEnemy(scene, enemy.sprite.x, enemy.sprite.y, ctx.spell.visual);
-        },
-      });
+    scene.time.delayedCall(stunDur * 1000, () => {
+      enemy.isStunned = false;
+      if (enemy.sprite.active) enemy.sprite.clearTint();
+      svt.destroy();
+    });
 
-      scene.time.delayedCall(cfg.stunDuration * 1000, () => {
-        enemy.isStunned = false;
-        if (enemy.sprite.active) enemy.sprite.clearTint();
-        stunVisTimer.destroy();
-      });
-    }
-
-    // Arc to nearby enemies
-    let arcsRemaining = cfg.maxArcTargets;
+    // Chain arcs to nearby enemies (damage only, no buildup)
+    let arcsLeft = maxArcs;
     const hitSet = new Set<Enemy>();
     hitSet.add(enemy);
 
-    for (const other of ctx.enemies) {
-      if (arcsRemaining <= 0) break;
+    for (const other of enemies) {
+      if (arcsLeft <= 0) break;
       if (!other.alive || hitSet.has(other)) continue;
-
-      const dist = Phaser.Math.Distance.Between(
-        enemy.sprite.x, enemy.sprite.y,
-        other.sprite.x, other.sprite.y
-      );
-
-      if (dist <= cfg.arcRange) {
+      const dist = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, other.sprite.x, other.sprite.y);
+      if (dist <= arcRange) {
         hitSet.add(other);
-        arcsRemaining--;
-
-        const arcDmg = Math.round(ctx.spell.damage * cfg.arcDamagePercent);
-        other.takeDamage(arcDmg, { castId: ctx.castId });
-
-        // Core-themed arc between enemies
-        theme.renderArc(
-          scene,
-          enemy.sprite.x, enemy.sprite.y,
-          other.sprite.x, other.sprite.y,
-          ctx.spell.visual,
-        );
-
-        // Impact on the arced enemy
-        theme.renderImpact(scene, other.sprite.x, other.sprite.y, ctx.spell.visual, 12);
+        arcsLeft--;
+        // Chain damage — flat amount based on Core base damage
+        const arcDmg = Math.round(BalanceManager.core(CoreId.STORM).baseDamage * arcDmgPct);
+        other.takeDamage(arcDmg, { castId });
+        theme.renderArc(scene, enemy.sprite.x, enemy.sprite.y, other.sprite.x, other.sprite.y, {
+          color: 0xaa88ff, glowColor: 0xccaaff, trailColor: 0x8866dd,
+        });
+        theme.renderImpact(scene, other.sprite.x, other.sprite.y, {
+          color: 0xaa88ff, glowColor: 0xccaaff, trailColor: 0x8866dd,
+        }, 12);
       }
     }
   }
 
-  // ── GRAVITY ─────────────────────────────────────────────────────────────
+  // ── COSMIC: Gravity Pull ──────────────────────────────────────────────
 
-  private static applyGravity(ctx: EffectContext, enemy: Enemy, cfg: GravityConfig): void {
-    const scene = ctx.scene;
-    const theme = getCoreTheme(ctx.spell.core.id);
-    const cx = enemy.sprite.x;
-    const cy = enemy.sprite.y;
+  private static activateGravity(
+    scene: Phaser.Scene, enemy: Enemy, bal: any,
+    enemies: Enemy[], theme: any,
+  ): void {
+    const pullRadius = bal.status.pullRadius ?? 120;
+    const pullForce = bal.status.pullForce ?? 150;
+    const pullDur = bal.status.pullDurationSec ?? 2.0;
 
-    // Impact at gravity center
-    theme.renderImpact(scene, cx, cy, ctx.spell.visual, cfg.pullRadius * 0.3);
+    const cx = enemy.sprite.x, cy = enemy.sprite.y;
+    const visual = { color: 0xdd66ff, glowColor: 0xee99ff, trailColor: 0xbb44dd };
+
+    theme.renderImpact(scene, cx, cy, visual, pullRadius * 0.3);
 
     // Gravity well visual
-    const well = scene.add.circle(cx, cy, cfg.pullRadius, ctx.spell.visual.color, 0.06);
-    well.setDepth(7).setStrokeStyle(1, ctx.spell.visual.color, 0.2);
+    const well = scene.add.circle(cx, cy, pullRadius, visual.color, 0.06).setDepth(7).setStrokeStyle(1, visual.color, 0.2);
+    const iw = scene.add.circle(cx, cy, pullRadius * 0.3, visual.glowColor, 0.1).setDepth(7);
 
-    const innerWell = scene.add.circle(cx, cy, cfg.pullRadius * 0.3, ctx.spell.visual.glowColor, 0.1);
-    innerWell.setDepth(7);
-
-    // Gravity distortion lines (pulling inward)
-    const lineCount = 8;
     const pullLines: Phaser.GameObjects.Line[] = [];
-    for (let i = 0; i < lineCount; i++) {
-      const angle = (i / lineCount) * Math.PI * 2;
-      const startDist = cfg.pullRadius;
-      const sx = cx + Math.cos(angle) * startDist;
-      const sy = cy + Math.sin(angle) * startDist;
-
-      const line = scene.add.line(0, 0, sx, sy, cx, cy, ctx.spell.visual.trailColor, 0.15)
-        .setOrigin(0, 0).setLineWidth(0.5).setDepth(7);
-      pullLines.push(line);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const sx = cx + Math.cos(a) * pullRadius, sy = cy + Math.sin(a) * pullRadius;
+      const l = scene.add.line(0, 0, sx, sy, cx, cy, visual.trailColor, 0.15).setOrigin(0, 0).setLineWidth(0.5).setDepth(7);
+      pullLines.push(l);
     }
 
-    // Ambient particles spiraling inward
+    // Mark all enemies in range as gravity-affected (reduced separation burst)
+    const affectedEnemies = new Set<Enemy>();
+    for (const e of enemies) {
+      if (!e.alive || e.isFrozen) continue;
+      const dist = Phaser.Math.Distance.Between(cx, cy, e.sprite.x, e.sprite.y);
+      if (dist <= pullRadius) affectedEnemies.add(e);
+    }
+
+    // Minimum orbit distance — enemies cluster around center but don't collapse to a single point
+    const minOrbitDist = 18;
+
     const startTime = scene.time.now;
-    const pullEvent = scene.time.addEvent({
+    const pe = scene.time.addEvent({
       delay: 16, loop: true,
       callback: () => {
         const elapsed = scene.time.now - startTime;
-        if (elapsed >= cfg.pullDuration * 1000) {
-          pullEvent.destroy();
+        if (elapsed >= pullDur * 1000) {
+          pe.destroy();
+          affectedEnemies.clear();
           scene.tweens.add({
-            targets: [well, innerWell, ...pullLines], alpha: 0, duration: 300,
-            onComplete: () => {
-              well.destroy();
-              innerWell.destroy();
-              for (const l of pullLines) l.destroy();
-            },
+            targets: [well, iw, ...pullLines], alpha: 0, duration: 300,
+            onComplete: () => { well.destroy(); iw.destroy(); for (const l of pullLines) l.destroy(); },
           });
           return;
         }
-
-        // Pull enemies
-        for (const e of ctx.enemies) {
+        for (const e of enemies) {
           if (!e.alive || e.isFrozen) continue;
           const dist = Phaser.Math.Distance.Between(cx, cy, e.sprite.x, e.sprite.y);
-          if (dist <= cfg.pullRadius && dist > 5) {
-            const angle = Phaser.Math.Angle.Between(e.sprite.x, e.sprite.y, cx, cy);
-            const pullStrength = cfg.pullForce * (1 - dist / cfg.pullRadius);
-            e.sprite.x += Math.cos(angle) * pullStrength * 0.016;
-            e.sprite.y += Math.sin(angle) * pullStrength * 0.016;
+          if (dist <= pullRadius && dist > minOrbitDist) {
+            // Pull toward center but stop at minOrbitDist
+            const a = Phaser.Math.Angle.Between(e.sprite.x, e.sprite.y, cx, cy);
+            const pullAmount = pullForce * (1 - dist / pullRadius) * 0.016;
+            const newDist = Math.max(minOrbitDist, dist - pullAmount);
+            const ratio = newDist / dist;
+            e.sprite.x = cx + (e.sprite.x - cx) * ratio;
+            e.sprite.y = cy + (e.sprite.y - cy) * ratio;
+            affectedEnemies.add(e);
+          } else if (dist <= minOrbitDist && dist > 0.1) {
+            // Already at orbit distance — apply gentle tangential drift to prevent stacking
+            const tangentAngle = Phaser.Math.Angle.Between(cx, cy, e.sprite.x, e.sprite.y) + Math.PI * 0.5;
+            e.sprite.x += Math.cos(tangentAngle) * 0.5;
+            e.sprite.y += Math.sin(tangentAngle) * 0.5;
           }
         }
-
-        // Core-themed ambient particles
         if (Math.random() > 0.6) {
-          const angle = Math.random() * Math.PI * 2;
-          const dist = cfg.pullRadius * (0.5 + Math.random() * 0.5);
-          const px = cx + Math.cos(angle) * dist;
-          const py = cy + Math.sin(angle) * dist;
-          theme.spawnAmbientParticle(scene, px, py, ctx.spell.visual);
-        }
-
-        // Status visuals on enemies being pulled
-        if (Math.random() > 0.8) {
-          for (const e of ctx.enemies) {
-            if (!e.alive) continue;
-            const dist = Phaser.Math.Distance.Between(cx, cy, e.sprite.x, e.sprite.y);
-            if (dist <= cfg.pullRadius) {
-              theme.renderStatusOnEnemy(scene, e.sprite.x, e.sprite.y, ctx.spell.visual);
-            }
-          }
+          const a = Math.random() * Math.PI * 2;
+          const d = pullRadius * (0.5 + Math.random() * 0.5);
+          theme.spawnAmbientParticle(scene, cx + Math.cos(a) * d, cy + Math.sin(a) * d, visual);
         }
       },
     });

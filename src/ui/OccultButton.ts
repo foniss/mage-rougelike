@@ -1,98 +1,10 @@
 import Phaser from 'phaser';
 import { OC, uiText, applyTextShadow } from '../config/uiStyles';
-
-export interface OccultButtonConfig {
-  scene: Phaser.Scene;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  text: string;
-  variant?: 'primary' | 'secondary';
-  onClick: () => void;
-  disabled?: boolean;
-}
-
+export interface OccultButtonConfig { scene: Phaser.Scene; x: number; y: number; width: number; height: number; text: string; variant?: 'primary' | 'secondary'; onClick: () => void; disabled?: boolean; }
 export class OccultButton extends Phaser.GameObjects.Container {
-  private bg: Phaser.GameObjects.Rectangle;
-  private border: Phaser.GameObjects.Rectangle;
-  private labelTxt: Phaser.GameObjects.Text;
-  private glow: Phaser.GameObjects.Rectangle;
-  
-  private _disabled: boolean;
-  private onClick: () => void;
-  private variant: 'primary' | 'secondary';
-
-  constructor(config: OccultButtonConfig) {
-    super(config.scene, config.x, config.y);
-    this._disabled = config.disabled || false;
-    this.onClick = config.onClick;
-    this.variant = config.variant || 'primary';
-    
-    const w = config.width;
-    const h = config.height;
-
-    const baseColor = this.variant === 'primary' ? OC.crimson : OC.panel2;
-    const hoverColor = this.variant === 'primary' ? 0x351a23 : 0x29151d;
-    const strokeColor = this.variant === 'primary' ? OC.crimsonBright : 0x574b61;
-
-    this.glow = this.scene.add.rectangle(0, 0, w + 12, h + 12, baseColor, 0).setAlpha(0);
-    this.bg = this.scene.add.rectangle(0, 0, w, h, OC.panel2, 0.7);
-    this.border = this.scene.add.rectangle(0, 0, w, h, 0, 0).setStrokeStyle(1, strokeColor, 0.4);
-    
-    this.labelTxt = this.scene.add.text(0, -2, config.text, uiText(15, this.variant === 'primary' ? '#ffd3d8' : '#777080', true)).setOrigin(0.5);
-    applyTextShadow(this.labelTxt);
-    
-    this.add([this.glow, this.bg, this.border, this.labelTxt]);
-    
-    this.bg.setInteractive({ useHandCursor: true });
-    
-    this.bg.on('pointerover', () => {
-      if (this._disabled) return;
-      this.bg.setFillStyle(hoverColor, 0.9);
-      this.scene.tweens.add({ targets: this, scaleX: 1.02, scaleY: 1.04, duration: 100 });
-      if (this.variant === 'primary') this.glow.setAlpha(0.2);
-    });
-    
-    this.bg.on('pointerout', () => {
-      if (this._disabled) return;
-      this.bg.setFillStyle(OC.panel2, 0.7);
-      this.scene.tweens.add({ targets: this, scaleX: 1, scaleY: 1, duration: 100 });
-      this.glow.setAlpha(0);
-    });
-    
-    this.bg.on('pointerdown', () => {
-      if (!this._disabled) {
-        this.scene.tweens.add({ targets: this, scaleX: 0.96, scaleY: 0.96, duration: 50, yoyo: true });
-        this.onClick();
-      }
-    });
-
-    this.scene.add.existing(this);
-    this.updateState();
-  }
-
-  public setDisabled(disabled: boolean) {
-    this._disabled = disabled;
-    this.updateState();
-  }
-  
-  public setText(text: string) {
-    this.labelTxt.setText(text);
-  }
-
-  private updateState() {
-    if (this._disabled) {
-      this.bg.setFillStyle(OC.panel, 0.5);
-      this.border.setStrokeStyle(1, 0x333333, 0.5);
-      this.labelTxt.setAlpha(0.4);
-      this.bg.disableInteractive();
-    } else {
-      this.bg.setFillStyle(OC.panel2, 0.7);
-      const strokeColor = this.variant === 'primary' ? OC.crimsonBright : 0x574b61;
-      this.border.setStrokeStyle(1, strokeColor, 0.4);
-      this.labelTxt.setAlpha(1);
-      this.bg.setInteractive({ useHandCursor: true });
-    }
-  }
+  private bg: Phaser.GameObjects.Rectangle; private border: Phaser.GameObjects.Rectangle; private labelTxt: Phaser.GameObjects.Text; private glow: Phaser.GameObjects.Rectangle; private _disabled: boolean; private onClick: () => void; private variant: 'primary' | 'secondary';
+  constructor(config: OccultButtonConfig) { super(config.scene, config.x, config.y); this._disabled = config.disabled || false; this.onClick = config.onClick; this.variant = config.variant || 'primary'; const w = config.width, h = config.height; const baseColor = this.variant === 'primary' ? OC.crimson : OC.panel2; const hoverColor = this.variant === 'primary' ? 0x351a23 : 0x29151d; const strokeColor = this.variant === 'primary' ? OC.crimsonBright : 0x574b61; this.glow = this.scene.add.rectangle(0, 0, w + 12, h + 12, baseColor, 0).setAlpha(0); this.bg = this.scene.add.rectangle(0, 0, w, h, OC.panel2, 0.7); this.border = this.scene.add.rectangle(0, 0, w, h, 0, 0).setStrokeStyle(1, strokeColor, 0.4); this.labelTxt = this.scene.add.text(0, -2, config.text, uiText(15, this.variant === 'primary' ? '#ffd3d8' : '#777080', true)).setOrigin(0.5); applyTextShadow(this.labelTxt); this.add([this.glow, this.bg, this.border, this.labelTxt]); this.bg.setInteractive({ useHandCursor: true }); this.bg.on('pointerover', () => { if (this._disabled) return; this.bg.setFillStyle(hoverColor, 0.9); this.scene.tweens.add({ targets: this, scaleX: 1.02, scaleY: 1.04, duration: 100 }); if (this.variant === 'primary') this.glow.setAlpha(0.2); }); this.bg.on('pointerout', () => { if (this._disabled) return; this.bg.setFillStyle(OC.panel2, 0.7); this.scene.tweens.add({ targets: this, scaleX: 1, scaleY: 1, duration: 100 }); this.glow.setAlpha(0); }); this.bg.on('pointerdown', () => { if (!this._disabled) { this.scene.tweens.add({ targets: this, scaleX: 0.96, scaleY: 0.96, duration: 50, yoyo: true }); this.onClick(); } }); this.scene.add.existing(this); this.updateState(); }
+  public setDisabled(disabled: boolean) { this._disabled = disabled; this.updateState(); }
+  public setText(text: string) { this.labelTxt.setText(text); }
+  private updateState() { if (this._disabled) { this.bg.setFillStyle(OC.panel, 0.5); this.border.setStrokeStyle(1, 0x333333, 0.5); this.labelTxt.setAlpha(0.4); this.bg.disableInteractive(); } else { this.bg.setFillStyle(OC.panel2, 0.7); const strokeColor = this.variant === 'primary' ? OC.crimsonBright : 0x574b61; this.border.setStrokeStyle(1, strokeColor, 0.4); this.labelTxt.setAlpha(1); this.bg.setInteractive({ useHandCursor: true }); } }
 }

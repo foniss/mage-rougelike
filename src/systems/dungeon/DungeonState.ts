@@ -1,36 +1,11 @@
-// src/systems/dungeon/DungeonState.ts
-//
-// Runtime state of the current dungeon run.
-
 import { RoomType, SinId, TOTAL_LAYERS, ROOMS_PER_LAYER } from '../../config/dungeonConfig';
 import { PlayerProgression } from './PlayerProgression';
+import { GrimoireSystem } from '../GrimoireSystem';
 import type { ShopItem } from './ShopGenerator';
 
-export interface RoomChoice {
-  cardA: RoomType;
-  cardB: RoomType;
-}
-
-export interface LayerState {
-  layerIndex: number;
-  sinId: SinId | null; // null for layer 4 (Devil)
-  rooms: RoomState[];
-  completed: boolean;
-}
-
-export interface RoomState {
-  roomIndex: number;
-  type: RoomType;
-  choice?: RoomChoice; // Only for choice rooms before player decides
-  chosen: boolean;
-  completed: boolean;
-  isCurrent: boolean;
-  /** Lazily created, room-local state for the Shop + Rest scene. */
-  shopState?: {
-    items: ShopItem[];
-    hasRested: boolean;
-  };
-}
+export interface RoomChoice { cardA: RoomType; cardB: RoomType; }
+export interface LayerState { layerIndex: number; sinId: SinId | null; rooms: RoomState[]; completed: boolean; }
+export interface RoomState { roomIndex: number; type: RoomType; choice?: RoomChoice; chosen: boolean; completed: boolean; isCurrent: boolean; shopState?: { items: ShopItem[]; hasRested: boolean; }; }
 
 export class DungeonState {
   public layers: LayerState[] = [];
@@ -40,30 +15,27 @@ export class DungeonState {
   public runActive: boolean = true;
   public runWon: boolean = false;
 
+  /** Persists spell slots across combat rooms within a run. */
+  public grimoireSystem: GrimoireSystem;
+
   constructor(progression: PlayerProgression) {
     this.progression = progression;
+    this.grimoireSystem = new GrimoireSystem();
+    this.grimoireSystem.setProgression(progression);
   }
 
-  getCurrentLayer(): LayerState {
-    return this.layers[this.currentLayerIndex];
-  }
-
-  getCurrentRoom(): RoomState {
-    return this.getCurrentLayer().rooms[this.currentRoomIndex];
-  }
+  getCurrentLayer(): LayerState { return this.layers[this.currentLayerIndex]; }
+  getCurrentRoom(): RoomState { return this.getCurrentLayer().rooms[this.currentRoomIndex]; }
 
   advanceRoom(): boolean {
     const layer = this.getCurrentLayer();
     layer.rooms[this.currentRoomIndex].completed = true;
     layer.rooms[this.currentRoomIndex].isCurrent = false;
-
     if (this.currentRoomIndex < ROOMS_PER_LAYER - 1) {
       this.currentRoomIndex++;
       layer.rooms[this.currentRoomIndex].isCurrent = true;
       return true;
     }
-
-    // Layer complete
     layer.completed = true;
     return false;
   }
@@ -75,14 +47,11 @@ export class DungeonState {
       this.layers[this.currentLayerIndex].rooms[0].isCurrent = true;
       return true;
     }
-
-    // Run complete (Devil defeated)
     this.runWon = true;
     this.runActive = false;
     return false;
   }
 
-  /** Player chose a card for a choice room */
   resolveChoice(chosenType: RoomType): void {
     const room = this.getCurrentRoom();
     room.type = chosenType;

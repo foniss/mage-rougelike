@@ -1,18 +1,8 @@
-// src/config/constants.ts
-
 import { BALANCE } from './balance';
-
-// --- Room (fills browser window; updated by viewport.ts on resize) ---
 export let ROOM_WIDTH = window.innerWidth;
 export let ROOM_HEIGHT = window.innerHeight;
-
-export function setRoomDimensions(w: number, h: number): void {
-  ROOM_WIDTH = w;
-  ROOM_HEIGHT = h;
-}
+export function setRoomDimensions(w: number, h: number): void { ROOM_WIDTH = w; ROOM_HEIGHT = h; }
 export const WALL_THICKNESS = 32;
-
-// --- Player ---
 export const PLAYER_MAX_HP = BALANCE.player.maxHp;
 export const PLAYER_MAX_MANA = BALANCE.player.maxMana;
 export const PLAYER_SPEED = BALANCE.player.speed;
@@ -25,24 +15,16 @@ export const BASIC_ATTACK_COOLDOWN = BALANCE.player.basicAttack.cooldownMs;
 export const PROJECTILE_SPEED = BALANCE.player.basicAttack.projectileSpeed;
 export const PROJECTILE_RADIUS = BALANCE.player.basicAttack.projectileRadius;
 export const PROJECTILE_LIFETIME = BALANCE.player.basicAttack.projectileLifetimeMs;
-
-// --- Enemy ---
 export const ENEMY_MAX_HP = BALANCE.enemy.default.maxHp;
 export const ENEMY_SPEED = BALANCE.enemy.default.speed;
 export const ENEMY_DAMAGE = BALANCE.enemy.default.contactDamage;
 export const ENEMY_RADIUS = BALANCE.enemy.default.radius;
 export const ENEMY_ATTACK_COOLDOWN = BALANCE.enemy.default.contactCooldownMs;
 export const ENEMY_COUNT = BALANCE.enemy.spawnCount;
-
-// --- Combat ---
 export const SPELL_CAST_COOLDOWN = BALANCE.combat.spellCastGlobalCooldownMs;
-
-// --- Grimoire ---
 export const GRIMOIRE_TIME_SCALE = 0.12;
 export const SPELL_SLOT_COUNT = 3;
 export const SPELL_HISTORY_MAX = 5;
-
-// --- Visual constants ---
 export const BURN_TICK_INTERVAL = 500;
 export const BURN_PARTICLE_INTERVAL = 150;
 export const BURN_PARTICLE_COLORS = [0xff6600, 0xff4400, 0xff8800, 0xffaa00];
